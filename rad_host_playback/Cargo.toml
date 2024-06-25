@@ -1,0 +1,12 @@
+[package]
+name = "rad_host_playback"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rad_compositor = { path = "../rad_compositor" }
+
+rodio = "0.18.0"
+# symphonia = "0.5.4"
