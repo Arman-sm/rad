@@ -53,7 +53,7 @@ Each compositor instance is run on a separate thread and calculates frames ahead
 There can be multiple compositors, even for the same composition as each compositor computes frames for a specific sample rate.
 
 ### Adapter
-Adaptes are a generic way to manage different outputs. (Closing, Fetching their status, etc.)
+Adapters are a generic way to manage different outputs. (Closing, Fetching their status, etc.)
 
 The reason they exist is that when playing audio to different devices, each device may be limited to communication to one method or two and so the communication can't be done through a single protocol so managing all the variations can get complex over time.
 
