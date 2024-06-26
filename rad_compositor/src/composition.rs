@@ -10,35 +10,8 @@ static COMPOSITOR_ID_TO_ALLOCATE: Mutex<u16> = Mutex::new(0);
 pub struct SrcCompositionData { pub frame_offset: isize, pub amplification: f32 }
 pub struct CompositionSrc { pub src: Src, pub composition_data: SrcCompositionData }
 
-pub enum FrameTime {
-	// sample-rate, value
-	Sample(u16, usize),
-	Seconds(f32)
-}
-
-impl FrameTime {
-	// Converts the time to the specified sample index
-	pub fn to_sample_rate(&self, sample_rate: u16) -> usize {
-		match self {
-			FrameTime::Sample(self_sample_rate, value) => {
-				if *self_sample_rate == sample_rate { return *value; }
-				*value * sample_rate as usize / *self_sample_rate as usize
-			},
-			FrameTime::Seconds(secs) => {
-				(secs * sample_rate as f32) as usize
-			}
-		}
-	}
-
-	// Creates a FrameTime based on a sample time
-	pub fn from_sample(sample_rate: u16, value: usize) -> Self {
-		Self::Sample(sample_rate, value)
-	}
-
-	// Creates a FrameTime based on seconds
-	pub fn from_seconds(seconds: f32) -> Self {
-		Self::Seconds(seconds)
-	}
+pub fn convert_sample_rates(sample_rate_a: u16, rate_a: usize, sample_rate_b: u16) -> usize {
+	rate_a * sample_rate_b as usize / sample_rate_a as usize
 }
 
 pub struct CompositionState {
@@ -59,10 +32,11 @@ pub struct CompositionState {
 impl CompositionState {
 	// Adds a source with its start set to now and amplification of 1.0
 	pub fn push_src_default(&mut self, src: Src) {
+		dbg!(src.sample_rate);
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,
-				frame_offset: (self.start_t.elapsed().as_f64() * src.sample_rate as f64) as isize
+				frame_offset: -(self.start_t.elapsed().as_f64() * src.sample_rate as f64) as isize
 			},
 			src,
 		});

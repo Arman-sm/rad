@@ -2,9 +2,9 @@ use std::{sync::{Arc, Condvar, Mutex}, thread::{self, sleep}, time::Duration};
 
 use coarsetime::Instant;
 
-use crate::{composition::{CompositionState, FrameTime, TWrappedCompositionState}, source::TSample};
+use crate::{composition::{convert_sample_rates, CompositionState, TWrappedCompositionState}, source::{Src, TSample}};
 
-const COMPUTE_AHEAD_SEC: f32 = 1.0;
+const COMPUTE_AHEAD_SEC: f32 = 0.5;
 
 /// The `BUF_SIZE` argument means how many f32s will fit inside of this buffer
 pub struct CompositionBufferNode<const BUF_SIZE: usize>  {
@@ -52,21 +52,54 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	}
 }
 
-pub fn compute_frame(cmp: &mut CompositionState, frame_time: FrameTime) -> Vec<TSample> {
+fn approximate_frame_linear(src: &mut Src, sample_rate: u16, rate: usize, offset: isize) -> Option<Vec<f32>> {
+	let conv = (rate * src.sample_rate as usize) as f64 / sample_rate as f64 + offset as f64;
+	let a = conv.floor() as usize;
+	let diff = conv - conv.floor();
+
+	if diff < 0.1 {
+		return src.get_by_frame_i(conv as usize);
+	} else if 0.9 < diff {
+		return src.get_by_frame_i(conv as usize + 1);
+	}
+
+	let res_a = src.get_by_frame_i(a)?;
+	let res_b = src.get_by_frame_i(a + 1)?;
+
+	let len = res_a.len().min(res_b.len());
+	let mut res = Vec::new();
+	res.reserve_exact(len);
+
+	for i in 0..len {
+		let sp_diff = res_b[i] - res_a[i];
+		res.push(res_a[i] + (sp_diff as f64 * diff) as f32);
+	}
+
+	Some(res)
+}
+
+pub fn compute_frame(cmp: &mut CompositionState, sample_rate: u16, frame_i: usize) -> Vec<TSample> {
 	let mut res = vec![0f32; cmp.channels];
 
 	// Getting the output of each source
-	for src_i in 0..cmp.sources.len() {
-		// TODO: This method of sample rate conversion (Nearest-Neighbor Interpolation) wildly decreases the audio quality, and so a proper sample-rate conversion algorithm has to be implemented.
-		// Temporary suggestion: Linear Interpolation -> Simple and fast but still decreased the quality by a lot.
-		let frame_i = frame_time.to_sample_rate(cmp.sources[src_i].src.sample_rate);
-		let src_frame_i = frame_i as isize - cmp.sources[src_i].composition_data.frame_offset;
+	for cmp_src in cmp.sources.iter_mut() {
+		let src_res: Option<Vec<f32>>;	
 		
-		if src_frame_i < 0 { continue; }
+		let conv_frame_i =
+			convert_sample_rates(sample_rate, frame_i, cmp_src.src.sample_rate) as isize
+			- cmp_src.composition_data.frame_offset - 1;
 
-		if let Some(v) = cmp.sources[src_i].src.get_by_frame_i(src_frame_i as usize) {
-			for v_i in 0..res.len().min(v.len()) {
-				res[v_i] += v[v_i] * cmp.sources[src_i].composition_data.amplification;
+		if conv_frame_i < cmp_src.composition_data.frame_offset { continue; }
+
+		if cmp_src.src.sample_rate == sample_rate {
+			src_res = cmp_src.src.get_by_frame_i(conv_frame_i as usize);
+		} else {
+			src_res = approximate_frame_linear(&mut cmp_src.src, sample_rate, frame_i, cmp_src.composition_data.frame_offset);
+		}
+		
+		if let Some(src_res) = src_res {
+			for channel_i in 0..res.len() {
+				res[channel_i] += src_res[channel_i % src_res.len()] * cmp_src.composition_data.amplification;
 			}
 		}
 	}
@@ -84,8 +117,7 @@ pub fn compute_frames<const BUF_SIZE: usize>(sample_rate: u16, cmp: &mut Composi
 	let n = BUF_SIZE / channels;
 
 	for i in 0..n {
-		let frame_time = FrameTime::from_sample(sample_rate, offset + i);
-		let frame = compute_frame(cmp, frame_time);
+		let frame = compute_frame(cmp, sample_rate, offset + i);
 		for (ch_i, v) in frame.into_iter().enumerate() {
 			res[i * channels + ch_i] = v;
 		}
