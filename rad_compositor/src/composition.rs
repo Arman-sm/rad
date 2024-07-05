@@ -32,11 +32,20 @@ pub struct CompositionState {
 impl CompositionState {
 	// Adds a source with its start set to now and amplification of 1.0
 	pub fn push_src_default(&mut self, src: Src) {
-		dbg!(src.sample_rate);
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,
 				frame_offset: -(self.start_t.elapsed().as_f64() * src.sample_rate as f64) as isize
+			},
+			src,
+		});
+	}
+
+	pub fn push_src_offset(&mut self, src: Src, frame_offset: isize) {
+		self.sources.push(CompositionSrc {
+			composition_data: SrcCompositionData { 
+				amplification: 1.0,
+				frame_offset
 			},
 			src,
 		});

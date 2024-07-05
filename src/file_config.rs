@@ -2,7 +2,7 @@ use std::{collections::HashSet, fs::File, io::Read, net::ToSocketAddrs, sync::{A
 
 use rad_compositor::{adapter::AdapterHandle, composition::{CompositionState, TWrappedCompositionState}, compositor::{CompositionBufferNode, init_compositor_thread}};
 // use rad_host_playback::{init_host_playback_default, playback::HostPlayback};
-use rad_net_stream::init_udp_adapter;
+use rad_net_stream::{simple_http::init_simple_http_adapter, init_udp_adapter};
 use serde::Deserialize;
 use toml::Table;
 
@@ -30,7 +30,8 @@ struct OutputEndpoint {
 	adapter: String,
 	ap: Table,
 	cast: String,
-	sample_rate: u16,
+	sample_rate: u32,
+	channels: u16
 }
 
 pub struct PState  {
@@ -72,7 +73,7 @@ fn create_compositions(compositions: &Vec<Composition>) -> Vec<TWrappedCompositi
 struct WCmpBuf {
 	buf: Arc<CompositionBufferNode<1024>>,
 	id: String,
-	sample_rate: u16,
+	sample_rate: u32,
 }
 
 fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions: &mut Vec<TWrappedCompositionState>, end_conf: &OutputEndpoint) -> AdapterHandle {
@@ -121,6 +122,38 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 				end_conf.id.clone(),
 				bind_addr,
 				dest_addr,
+				buf
+			)
+		},
+		// "net-ws" => {
+		// 	let adapter_args = &end_conf.ap;
+			
+		// 	let bind_addr =
+		// 		adapter_args.get("bind").expect("Filed \"ap:bind\" can't be left empty.")
+		// 		.as_str().expect("Field \"ap:bind\" has to be a string.")
+		// 		.to_socket_addrs().expect("Field \"ap:bind\" has to be a proper address.")
+		// 		.nth(0).expect("No addresses were found in \"ap:bind\".");
+
+		// 	init_ws_adapter(
+		// 		end_conf.id.clone(),
+		// 		bind_addr,
+		// 		buf
+		// 	)
+		// },
+		"net-simple-http" => {
+			let adapter_args = &end_conf.ap;
+			
+			let bind_addr =
+				adapter_args.get("bind").expect("Filed \"ap:bind\" can't be left empty.")
+				.as_str().expect("Field \"ap:bind\" has to be a string.")
+				.to_socket_addrs().expect("Field \"ap:bind\" has to be a proper address.")
+				.nth(0).expect("No addresses were found in \"ap:bind\".");
+
+			init_simple_http_adapter(
+				end_conf.id.clone(),
+				end_conf.sample_rate,
+				end_conf.channels,
+				bind_addr,
 				buf
 			)
 		},

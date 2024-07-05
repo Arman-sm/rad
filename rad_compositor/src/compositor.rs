@@ -6,7 +6,9 @@ use crate::{composition::{convert_sample_rates, CompositionState, TWrappedCompos
 
 const COMPUTE_AHEAD_SEC: f32 = 0.5;
 
-/// The `BUF_SIZE` argument means how many f32s will fit inside of this buffer
+/// A linked list like structure for streaming audio that supports multithreading. <br/>
+/// 
+/// Note: The `BUF_SIZE` argument means how many f32s will fit inside of this buffer
 pub struct CompositionBufferNode<const BUF_SIZE: usize>  {
 	cnxt: Condvar,
 	next: Mutex<Option<Arc<CompositionBufferNode<BUF_SIZE>>>>,
@@ -26,6 +28,8 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		res
 	}
 
+	/// Sets the next buffers and causes the other threads waiting for the next buffer to resume.
+	/// Caution: This method panics if the next buffer is already set.
 	pub fn push_next(&self, buf: [f32; BUF_SIZE]) -> Arc<Self> {
 		let mut next_lock = self.next.lock().unwrap();
 		if next_lock.is_some() { panic!("Tried to push the next buf while it already existed.") }
@@ -38,6 +42,8 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		next_node
 	}
 
+	/// Gives the next buffer. <br/>
+	/// Caution: This method **will wait** for the compositor thread to generate the next buffer if it wasn't generated.
 	pub fn next(&self) -> Arc<Self> {
 		let mut next = self.next.lock().unwrap();
 		while next.is_none() {
@@ -47,8 +53,25 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		next.as_ref().unwrap().clone()
 	}
 	
+	/// Gives a reference to the buffer data.
 	pub fn buf(&self) -> &[f32; BUF_SIZE] {
 		&self.buffer
+	}
+
+	/// Gives the last buffer generated in the list.
+	pub fn head(&self) -> Arc<Self> {
+		let mut head = self.next();
+		
+		loop {
+			let next = head.next.lock().unwrap().clone();
+			if let Some(node) = next {
+				head = node;
+			} else {
+				break;
+			}
+		}
+
+		head
 	}
 }
 

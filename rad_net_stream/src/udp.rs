@@ -14,7 +14,7 @@ pub fn init_udp_adapter(id: String, bind_addr: SocketAddr, dest_addr: SocketAddr
     let is_closed = Arc::new(AtomicBool::new(false));
 
     let _is_closed = is_closed.clone();
-    thread::Builder::new().name(format!("ap-{id}")).spawn(move || loop {
+    thread::Builder::new().name(format!("ap-udp-{id}")).spawn(move || loop {
         use std::sync::atomic::Ordering;
 
         if is_closed.load(Ordering::Relaxed) { return; }
@@ -33,5 +33,5 @@ pub fn init_udp_adapter(id: String, bind_addr: SocketAddr, dest_addr: SocketAddr
         cmp_node = cmp_node.next();
     }).unwrap();
 
-    AdapterHandle::new(id, "udp-out".to_owned(), status.clone(), _is_closed)
+    AdapterHandle::new(id, "net-udp".to_owned(), status.clone(), _is_closed)
 }
