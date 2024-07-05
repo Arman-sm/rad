@@ -1,13 +1,14 @@
 workspace = { members = ["rad_host_playback", "rad_compositor", "rad_net_stream", "rad_dbg_udp_reciever"] }
 [package]
 name = "rad"
+repository = "https://github.com/Arman-sm/rad"
+readme = "./README.md"
+license-file = "./LICENSE"
 authors = ["Arman Salimi Moghadam"]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]
-# opt-level = ""
 lto = "fat"
 
 [dependencies]
