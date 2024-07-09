@@ -9,7 +9,7 @@ use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
-use crate::source::{utils::delay_iter, iter_func, Src};
+use crate::source::{utils::delay_iter, iter::IterSrc};
 
 #[derive(Debug)]
 pub enum InitError {
@@ -18,13 +18,13 @@ pub enum InitError {
     NoTrackFound
 }
 
-pub fn init_symphonia_src(file: File) -> Result<Src, InitError> {
+pub fn init_symphonia_src(file: File, suggested_mime_type: &str) -> Result<IterSrc, InitError> {
     // Create the media source stream.
     let mss = MediaSourceStream::new(Box::new(file), Default::default());
 
     // Create a probe hint using the file's extension. [Optional]
     let mut hint = Hint::new();
-    hint.with_extension("mp3");
+    hint.mime_type(suggested_mime_type);
 
     // Use the default options for metadata and format readers.
     let meta_opts: MetadataOptions = Default::default();
@@ -83,16 +83,16 @@ pub fn init_symphonia_src(file: File) -> Result<Src, InitError> {
 
     let first_buf = buf.samples().to_vec();
     Ok(
-        Src::new(
-        iter_func(delay_iter(
+        IterSrc::new(
+        delay_iter(
             Box::new(move || {
                 if let Some((buf, _)) = func() {
                     return Some(buf.samples().to_vec());
                 }
 
                 None
-            }), Some(first_buf))
-        ),
-        spec.rate as u16, spec.channels.count() as usize)
+            }
+        ), Some(first_buf)),
+        spec.rate, spec.channels.count() as usize)
     )
 }

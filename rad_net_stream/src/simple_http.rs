@@ -1,9 +1,7 @@
 use std::{io::{Read, Write}, net::{SocketAddr, TcpListener, TcpStream}, slice::from_raw_parts, sync::{atomic::AtomicBool, Arc, Mutex}, thread};
 
 use rad_compositor::{adapter::AdapterHandle, compositor::CompositionBufferNode};
-use wav::gen_wav_header;
-
-mod wav;
+use crate::utils::wav::gen_wav_header;
 
 /// Size of each buffer in bytes
 const BUF_SIZE: usize = 2048;
@@ -14,7 +12,7 @@ type TCmpNode = Arc<CompositionBufferNode<1024>>;
 const HTTP_INITIAL_MSG: &str = "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5\r\nTransfer-Encoding: chunked\r\n\r\n";
 
 // TODO: Optimize
-fn handle_conn(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, mut st: TcpStream) {
+pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, mut st: TcpStream) {
     // Streams the data using http chunked streaming method
     // Reference: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
     // Reference: Analyzing the same thing done in https://github.com/Arman-sm/Atmosphere via wireshark 
@@ -44,9 +42,6 @@ fn handle_conn(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, mut st:
 
     st.write_all(&buf).unwrap();
     st.flush().unwrap();
-    
-    // Getting to the head
-    *cmp_node = cmp_node.head();
 
     // Sending the actual audio
     loop {
@@ -92,8 +87,12 @@ pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bin
             match incoming {
                 Ok(st) => {
                     let mut cmp = cmp_node.clone();
+                    
+                    // Getting to the head
+                    cmp = cmp.head();
+                    
                     thread::spawn(move || {
-                        handle_conn(&mut cmp, sample_rate, channels, st);
+                        stream_as_wav(&mut cmp, sample_rate, channels, st);
                     });
                 },
                 Err(e) => {

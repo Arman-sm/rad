@@ -5,7 +5,7 @@ repository = "https://github.com/Arman-sm/rad"
 readme = "./README.md"
 license-file = "./LICENSE"
 authors = ["Arman Salimi Moghadam"]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 [profile.release]

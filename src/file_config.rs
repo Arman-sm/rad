@@ -2,7 +2,7 @@ use std::{collections::HashSet, fs::File, io::Read, net::ToSocketAddrs, sync::{A
 
 use rad_compositor::{adapter::AdapterHandle, composition::{CompositionState, TWrappedCompositionState}, compositor::{CompositionBufferNode, init_compositor_thread}};
 // use rad_host_playback::{init_host_playback_default, playback::HostPlayback};
-use rad_net_stream::{simple_http::init_simple_http_adapter, init_udp_adapter};
+use rad_net_stream::{init_simple_http_adapter, init_udp_adapter};
 use serde::Deserialize;
 use toml::Table;
 

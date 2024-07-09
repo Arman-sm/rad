@@ -2,9 +2,9 @@ use std::{sync::{Arc, Condvar, Mutex}, thread::{self, sleep}, time::Duration};
 
 use coarsetime::Instant;
 
-use crate::{composition::{convert_sample_rates, CompositionState, TWrappedCompositionState}, source::{Src, TSample}};
+use crate::{composition::{convert_sample_rates, CompositionState, TWrappedCompositionState}, source::{BaseSource, Source, TSample}};
 
-const COMPUTE_AHEAD_SEC: f32 = 0.5;
+const COMPUTE_AHEAD_SEC: f64 = 0.15;
 
 /// A linked list like structure for streaming audio that supports multithreading. <br/>
 /// 
@@ -75,16 +75,10 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	}
 }
 
-fn approximate_frame_linear(src: &mut Src, sample_rate: u16, rate: usize, offset: isize) -> Option<Vec<f32>> {
-	let conv = (rate * src.sample_rate as usize) as f64 / sample_rate as f64 + offset as f64;
+fn approximate_frame_linear(src: &mut Source, sample_rate: u32, rate: usize, offset: isize) -> Option<Vec<f32>> {
+	let conv = (rate * src.sample_rate() as usize) as f64 / sample_rate as f64 + offset as f64;
 	let a = conv.floor() as usize;
 	let diff = conv - conv.floor();
-
-	if diff < 0.1 {
-		return src.get_by_frame_i(conv as usize);
-	} else if 0.9 < diff {
-		return src.get_by_frame_i(conv as usize + 1);
-	}
 
 	let res_a = src.get_by_frame_i(a)?;
 	let res_b = src.get_by_frame_i(a + 1)?;
@@ -101,7 +95,7 @@ fn approximate_frame_linear(src: &mut Src, sample_rate: u16, rate: usize, offset
 	Some(res)
 }
 
-pub fn compute_frame(cmp: &mut CompositionState, sample_rate: u16, frame_i: usize) -> Vec<TSample> {
+pub fn compute_frame(cmp: &mut CompositionState, sample_rate: u32, frame_i: usize) -> Vec<TSample> {
 	let mut res = vec![0f32; cmp.channels];
 
 	// Getting the output of each source
@@ -109,12 +103,12 @@ pub fn compute_frame(cmp: &mut CompositionState, sample_rate: u16, frame_i: usiz
 		let src_res: Option<Vec<f32>>;	
 		
 		let conv_frame_i =
-			convert_sample_rates(sample_rate, frame_i, cmp_src.src.sample_rate) as isize
+			convert_sample_rates(sample_rate, frame_i, cmp_src.src.sample_rate()) as isize
 			- cmp_src.composition_data.frame_offset - 1;
 
 		if conv_frame_i < cmp_src.composition_data.frame_offset { continue; }
 
-		if cmp_src.src.sample_rate == sample_rate {
+		if cmp_src.src.sample_rate() == sample_rate {
 			src_res = cmp_src.src.get_by_frame_i(conv_frame_i as usize);
 		} else {
 			src_res = approximate_frame_linear(&mut cmp_src.src, sample_rate, frame_i, cmp_src.composition_data.frame_offset);
@@ -134,7 +128,7 @@ pub fn compute_frame(cmp: &mut CompositionState, sample_rate: u16, frame_i: usiz
 	res
 }
 
-pub fn compute_frames<const BUF_SIZE: usize>(sample_rate: u16, cmp: &mut CompositionState, offset: usize) -> [f32; BUF_SIZE] {
+pub fn compute_frames<const BUF_SIZE: usize>(sample_rate: u32, cmp: &mut CompositionState, offset: usize) -> [f32; BUF_SIZE] {
 	let mut res = [0.0; BUF_SIZE];
 	let channels = cmp.channels;
 	let n = BUF_SIZE / channels;
@@ -149,8 +143,8 @@ pub fn compute_frames<const BUF_SIZE: usize>(sample_rate: u16, cmp: &mut Composi
 	res
 }
 
-pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u16, cmp_state: TWrappedCompositionState) -> Arc<CompositionBufferNode<BUF_SIZE>>
-{	
+/// Initiates a new compositor to work on a separate thread and returns a pointer to the first buffer node which is an entry to the audio stream.
+pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state: TWrappedCompositionState) -> Arc<CompositionBufferNode<BUF_SIZE>> {
 	assert!(BUF_SIZE & 1 != 1);
 	let first_node: Arc<CompositionBufferNode<BUF_SIZE>>;
 	let channels;
@@ -176,8 +170,8 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u16, cmp_state
 			let mut change_idx = 0;
 
 			loop {
-				let secs_sent = (buf_computed * frames_in_buf) as f32 / 44100.0 as f32;
-				if start.elapsed().as_f64() as f32 - secs_sent < COMPUTE_AHEAD_SEC {
+				let secs_sent = (buf_computed * frames_in_buf) as f64 / sample_rate as f64;
+				if COMPUTE_AHEAD_SEC < secs_sent - start.elapsed().as_f64() {
 					sleep(Duration::from_secs_f32(0.05));
 					continue;
 				}

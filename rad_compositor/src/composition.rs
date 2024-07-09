@@ -2,15 +2,15 @@ use std::{sync::{Arc, Mutex, RwLock}, usize, vec};
 
 use coarsetime::{Duration, Instant};
 
-use crate::source::Src;
+use crate::source::{BaseSource, Source};
 
 pub type TWrappedCompositionState = Arc<RwLock<CompositionState>>;
 
 static COMPOSITOR_ID_TO_ALLOCATE: Mutex<u16> = Mutex::new(0);
 pub struct SrcCompositionData { pub frame_offset: isize, pub amplification: f32 }
-pub struct CompositionSrc { pub src: Src, pub composition_data: SrcCompositionData }
+pub struct CompositionSrc { pub src: Source, pub composition_data: SrcCompositionData }
 
-pub fn convert_sample_rates(sample_rate_a: u16, rate_a: usize, sample_rate_b: u16) -> usize {
+pub fn convert_sample_rates(sample_rate_a: u32, rate_a: usize, sample_rate_b: u32) -> usize {
 	rate_a * sample_rate_b as usize / sample_rate_a as usize
 }
 
@@ -31,17 +31,17 @@ pub struct CompositionState {
 
 impl CompositionState {
 	// Adds a source with its start set to now and amplification of 1.0
-	pub fn push_src_default(&mut self, src: Src) {
+	pub fn push_src_default(&mut self, src: Source) {
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,
-				frame_offset: -(self.start_t.elapsed().as_f64() * src.sample_rate as f64) as isize
+				frame_offset: -(self.start_t.elapsed().as_f64() * src.sample_rate() as f64) as isize
 			},
 			src,
 		});
 	}
 
-	pub fn push_src_offset(&mut self, src: Src, frame_offset: isize) {
+	pub fn push_src_offset(&mut self, src: Source, frame_offset: isize) {
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,

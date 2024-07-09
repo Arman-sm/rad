@@ -1,6 +1,6 @@
 use std::{fs::{canonicalize, File}, io::{stdin, stdout, Write}, path::PathBuf};
 
-use rad_compositor::{composition::TWrappedCompositionState, sources::symphonia::init_symphonia_src};
+use rad_compositor::{composition::TWrappedCompositionState, source::utils::{audio_mime_subtype_from_ext, queue_from_directory}, sources::symphonia::init_symphonia_src};
 
 use crate::{arg_config::ArgConfig, file_config::PState};
 
@@ -20,14 +20,18 @@ const HELP_PAGE: &str =
 > go {time(second)}                               -> Sets timeline value
 > help                                            -> Prints the help page";
 
-const SECOND_DECIMAL_PRECISION: u8 = 1;
-pub fn format_f32_sec(seconds: f32) -> String {
-	const PRECISION_POW: f32 = 10u16.pow(SECOND_DECIMAL_PRECISION as u32) as f32;
+const SEC_F32_DECIMAL_PRECISION: u8 = 2;
+fn format_f32_sec(seconds: f32) -> String {
+	const PRECISION_POW: f32 = 10u16.pow(SEC_F32_DECIMAL_PRECISION as u32) as f32;
 
 	((seconds * PRECISION_POW).floor() / PRECISION_POW).to_string()
 }
+
+const QUEUE_SAMPLE_RATE: u32 = 44100;
+const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
+const DEFAULT_HINT_EXT: &str = "mp3";
 	
-pub fn init_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
+pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 	let PState { composition_states: ref mut cmp_states, ref mut adapters } = p_state;
 	let mut curr_cmp: Option<TWrappedCompositionState> = None;
 	
@@ -132,24 +136,43 @@ pub fn init_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 				curr_cmp = c;
 			},
 			// Opens a file as a source and adds it to the selected composition
-			["op", file_path] | ["open", file_path] => {
+			["op", path] | ["open", path] => {
 				let curr_cmp = match &curr_cmp {
 					None => { eprintln!("Please select a composition first."); continue; },
 					Some(cmp) => cmp
 				};
 				
-				let file_path =
-					if file_path.starts_with("+") {
-						run_conf.audio_dir().join(file_path.strip_prefix("+").unwrap())
-					} else { PathBuf::from(file_path) };
+				let path =
+					if path.starts_with("+") {
+						run_conf.audio_dir().join(path.strip_prefix("+").unwrap())
+					} else { PathBuf::from(path) };
 				
-				if !file_path.exists() || !file_path.is_file() { eprintln!("File does not exist."); continue; }
+				if !path.exists() { eprintln!("File does not exist."); continue; }
 				
-				log::debug!("Opening \"{:?}\"", canonicalize(file_path.clone()).unwrap());
-				let file = File::open(file_path).unwrap();
+				if path.is_dir() {
+					log::debug!("Directory detected, making a queue.");
+					let queue = match queue_from_directory(&path, QUEUE_SAMPLE_RATE, OPEN_DIR_SEARCH_DEPTH) {
+						Some(queue) => queue,
+						None => { eprintln!("Something went wrong while creating a queue."); continue; }
+					};
+
+					curr_cmp.write().unwrap().push_src_default(queue.into());
+
+					continue;
+				}
+	
+				log::debug!("Opening \"{:?}\"", canonicalize(&path).unwrap());
+				let file = File::open(&path).unwrap();
 				
 				log::debug!("Initializing the source");
-				let src = match init_symphonia_src(file) {
+				let ext: &str = match path.extension() {
+					Some(ext) => { ext.try_into().unwrap_or(DEFAULT_HINT_EXT) },
+					None => DEFAULT_HINT_EXT
+				};
+
+				let mime_subtype = audio_mime_subtype_from_ext(ext);
+
+				let src = match init_symphonia_src(file, format!("audio/{mime_subtype}").as_str()) {
 					Ok(_src) => _src,
 					Err(err) => {
 						eprintln!("Failed to create the source.");
@@ -158,7 +181,7 @@ pub fn init_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 						continue;
 					}
 				};
-				curr_cmp.write().unwrap().push_src_default(src)
+				curr_cmp.write().unwrap().push_src_default(src.into())
 			},
 			["go", _sec] => {
 				let curr_cmp = match &curr_cmp {

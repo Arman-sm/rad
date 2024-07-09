@@ -26,7 +26,10 @@ pub struct ArgConfig {
 	pub dbg_cli: bool,
 	
 	#[clap(short = 'c', long = "config", default_value = DEFAULT_CONFIG_FILE_PATH)]
-	pub config_path: PathBuf,
+	pub file_config_path: PathBuf,
+
+	// #[clap(short = 'D', long = "no-defaults", default_value_t = false)]
+	// pub no_defaults: bool
 }
 
 impl ArgConfig {
@@ -60,4 +63,3 @@ pub fn get_arg_config() -> ArgConfig {
 
 	conf
 }
-
