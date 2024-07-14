@@ -142,6 +142,8 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					None => { eprintln!("Please select a composition first."); continue; },
 					Some(cmp) => cmp
 				};
+
+				let path = path.trim_start().trim_end();
 				
 				if path.is_empty() {
 					eprintln!("No path was given.");
@@ -159,8 +161,13 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 							let without_prefix = match path.strip_prefix("~/") {
 								Some(path) => path,
 								None => {
-									eprintln!("Invalid path");
-									continue;
+									// $HOME + "" = $HOME
+									if path.len() == 1 {
+										""
+									} else {
+										eprintln!("Invalid path");
+										continue;
+									}
 								}
 							};
 
