@@ -88,8 +88,7 @@ pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bin
                 Ok(st) => {
                     let mut cmp = cmp_node.clone();
                     
-                    // Getting to the head
-                    cmp = cmp.head();
+                    cmp = cmp.live(sample_rate, channels);
                     
                     thread::spawn(move || {
                         stream_as_wav(&mut cmp, sample_rate, channels, st);

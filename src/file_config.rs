@@ -88,7 +88,7 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 			let cmp = compositions
 				.iter()
 				.find(|c| c.read().unwrap().id == end_conf.cast)
-				.expect(format!("Composition \"{}\" was not found. (set as \"cast\" in an endpoint config)", end_conf.id).as_str());
+				.expect(format!("Composition '{}' was not found. (set as 'cast' in an endpoint config)", end_conf.id).as_str());
 
 			let b = init_compositor_thread(44100, cmp.clone());
 
@@ -107,16 +107,16 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 			let adapter_args = &end_conf.ap;
 			
 			let bind_addr =
-				adapter_args.get("bind").expect("Filed \"ap:bind\" can't be left empty.")
-				.as_str().expect("Field \"ap:bind\" has to be a string.")
-				.to_socket_addrs().expect("Field \"ap:bind\" has to be a proper address.")
-				.nth(0).expect("No addresses were found in \"ap:bind\".");
+				adapter_args.get("bind").expect("Filed 'ap:bind' can't be left empty.")
+				.as_str().expect("Field 'ap:bind' has to be a string.")
+				.to_socket_addrs().expect("Field 'ap:bind' has to be a proper address.")
+				.nth(0).expect("No addresses were found in 'ap:bind'.");
 
 			let dest_addr =
-				adapter_args.get("dest").expect("Filed \"ap:dest\" can't be left empty.")
-				.as_str().expect("Field \"ap:dest\" has to be a string.")
-				.to_socket_addrs().expect("Field \"ap:dest\" has to be a proper address.")
-				.nth(0).expect("No addresses were found in \"ap:dest\".");
+				adapter_args.get("dest").expect("Filed 'ap:dest' can't be left empty.")
+				.as_str().expect("Field 'ap:dest' has to be a string.")
+				.to_socket_addrs().expect("Field 'ap:dest' has to be a proper address.")
+				.nth(0).expect("No addresses were found in 'ap:dest'.");
 
 			init_udp_adapter(
 				end_conf.id.clone(),
@@ -129,10 +129,10 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 		// 	let adapter_args = &end_conf.ap;
 			
 		// 	let bind_addr =
-		// 		adapter_args.get("bind").expect("Filed \"ap:bind\" can't be left empty.")
-		// 		.as_str().expect("Field \"ap:bind\" has to be a string.")
-		// 		.to_socket_addrs().expect("Field \"ap:bind\" has to be a proper address.")
-		// 		.nth(0).expect("No addresses were found in \"ap:bind\".");
+		// 		adapter_args.get("bind").expect("Filed 'ap:bind' can't be left empty.")
+		// 		.as_str().expect("Field 'ap:bind' has to be a string.")
+		// 		.to_socket_addrs().expect("Field 'ap:bind' has to be a proper address.")
+		// 		.nth(0).expect("No addresses were found in 'ap:bind'.");
 
 		// 	init_ws_adapter(
 		// 		end_conf.id.clone(),
@@ -144,10 +144,10 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 			let adapter_args = &end_conf.ap;
 			
 			let bind_addr =
-				adapter_args.get("bind").expect("Filed \"ap:bind\" can't be left empty.")
-				.as_str().expect("Field \"ap:bind\" has to be a string.")
-				.to_socket_addrs().expect("Field \"ap:bind\" has to be a proper address.")
-				.nth(0).expect("No addresses were found in \"ap:bind\".");
+				adapter_args.get("bind").expect("Filed 'ap:bind' can't be left empty.")
+				.as_str().expect("Field 'ap:bind' has to be a string.")
+				.to_socket_addrs().expect("Field 'ap:bind' has to be a proper address.")
+				.nth(0).expect("No addresses were found in 'ap:bind'.");
 
 			init_simple_http_adapter(
 				end_conf.id.clone(),
@@ -195,21 +195,21 @@ fn create_endpoints(compositions: &mut Vec<TWrappedCompositionState>, endpoints_
 /// This function with panic in case of encountering any errors while trying to read and set the program up according to it.
 /// As in any case the program is not intended to be ran in case of a faulty configuration file.
 pub fn init_with_file_config(path: &str) -> PState {
-	log::debug!("Reading the configuration file at \"{path}\".");
+	log::debug!("Reading the configuration file at '{path}'.");
 	
 	let mut raw_config = String::new();
 	
 	if let Ok(mut file) = File::open(path) {
 		let read_res = file.read_to_string(&mut raw_config);
 		if let Err(e) = read_res {
-			panic!("Failed to read the configuration file at \"{path}\" due to io error \"{e}\".");
+			panic!("Failed to read the configuration file at '{path}' due to io error '{e}'.");
 		}
 	}
 
 	let config: FileConfig =
 		match toml::from_str(&raw_config) {
 			Ok(v) => v,
-			Err(_) => panic!("Failed to parse \"{path}\".")
+			Err(_) => panic!("Failed to parse '{path}'.")
 		};
 	
 	let mut cmp_states = create_compositions(&config.composition);

@@ -161,7 +161,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					continue;
 				}
 	
-				log::debug!("Opening \"{:?}\"", canonicalize(&path).unwrap());
+				log::debug!("Opening '{:?}'", canonicalize(&path).unwrap());
 				let file = File::open(&path).unwrap();
 				
 				log::debug!("Initializing the source");
@@ -176,7 +176,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					Ok(_src) => _src,
 					Err(err) => {
 						eprintln!("Failed to create the source.");
-						log::error!("Initialization failed with error \"{:?}\".", err);
+						log::error!("Initialization failed with error '{:?}'.", err);
 
 						continue;
 					}

@@ -12,14 +12,14 @@ const COMPUTE_AHEAD_SEC: f32 = 0.15;
 pub struct CompositionBufferNode<const BUF_SIZE: usize>  {
 	cnxt: Condvar,
 	next: Mutex<Option<Arc<CompositionBufferNode<BUF_SIZE>>>>,
-	buffer: [f32; BUF_SIZE]
+	buf: [f32; BUF_SIZE]
 }
 
 impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	pub fn new(buf: [f32; BUF_SIZE]) -> Arc<Self> {
 		let res = Arc::new(
 			CompositionBufferNode {
-				buffer: buf,
+				buf,
 				cnxt: Condvar::new(),
 				next: Mutex::new(None),
 			}
@@ -55,7 +55,7 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	
 	/// Gives a reference to the buffer data.
 	pub fn buf(&self) -> &[f32; BUF_SIZE] {
-		&self.buffer
+		&self.buf
 	}
 
 	/// Gives the last buffer generated in the list.
@@ -72,6 +72,35 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		}
 
 		head
+	}
+
+	pub fn live(&self, sample_rate: u32, channels: u16) -> Arc<Self> {
+		let computed_buffers_ahead_of_time = (COMPUTE_AHEAD_SEC * sample_rate as f32) as usize / (BUF_SIZE / channels as usize);
+
+		let mut res = self.next();
+
+		let mut i = 1;
+		let mut head = self.next();
+
+		loop {
+			let next = head.next.lock().unwrap().clone();
+			if let Some(node) = next {
+				head = node;
+			} else {
+				if i < computed_buffers_ahead_of_time {
+					for _ in 0..(computed_buffers_ahead_of_time - i) {
+						head.next();
+					}
+				}
+
+				return res;
+			}
+
+			i += 1;
+			if computed_buffers_ahead_of_time < i {
+				res = res.next()
+			}
+		}
 	}
 }
 
