@@ -18,7 +18,8 @@ const HELP_PAGE: &str =
 > ap del {ap-id}                                  -> Deletes an adapter by ID
 > t | time                                        -> Time value of a composition in seconds
 > go {time(second)}                               -> Sets timeline value
-> help                                            -> Prints the help page";
+> help                                            -> Prints the help page
+> p                                               -> Pauses/Plays the selected composition";
 
 const SEC_F32_DECIMAL_PRECISION: u8 = 2;
 fn format_f32_sec(seconds: f32) -> String {
