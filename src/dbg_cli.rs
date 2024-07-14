@@ -1,4 +1,4 @@
-use std::{fs::{canonicalize, File}, io::{stdin, stdout, Write}, path::PathBuf};
+use std::{env, fs::{canonicalize, File}, io::{stdin, stdout, Write}, path::PathBuf};
 
 use rad_compositor::{composition::TWrappedCompositionState, source::utils::{audio_mime_subtype_from_ext, queue_from_directory}, sources::symphonia::init_symphonia_src};
 
@@ -31,7 +31,7 @@ fn format_f32_sec(seconds: f32) -> String {
 const QUEUE_SAMPLE_RATE: u32 = 44100;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
 const DEFAULT_HINT_EXT: &str = "mp3";
-	
+
 pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 	let PState { composition_states: ref mut cmp_states, ref mut adapters } = p_state;
 	let mut curr_cmp: Option<TWrappedCompositionState> = None;
@@ -143,11 +143,42 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					Some(cmp) => cmp
 				};
 				
-				let path =
-					if path.starts_with("+") {
+				if path.is_empty() {
+					eprintln!("No path was given.");
+					continue;
+				}
+
+				let path = match path.chars().next().unwrap() {
+					'+' => {
 						run_conf.audio_dir().join(path.strip_prefix("+").unwrap())
-					} else { PathBuf::from(path) };
-				
+					},
+					'~' => {
+						if cfg!(unix) {
+							let home_dir = env::var_os("HOME");
+							
+							let without_prefix = match path.strip_prefix("~/") {
+								Some(path) => path,
+								None => {
+									eprintln!("Invalid path");
+									continue;
+								}
+							};
+
+							match home_dir {
+								Some(home_dir) => PathBuf::from(home_dir).join(without_prefix),
+								None => PathBuf::from(path),
+							}
+						} else {
+							PathBuf::from(path)
+						}
+					},
+					_ => {
+						PathBuf::from(path)
+					}
+				};
+
+				dbg!(&path);
+			
 				if !path.exists() { eprintln!("File does not exist."); continue; }
 				
 				if path.is_dir() {

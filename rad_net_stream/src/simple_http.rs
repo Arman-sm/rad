@@ -98,7 +98,6 @@ pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bin
                     log::error!("Connection failure happened in adapter '{_id}' with error '{:?}'.", e);
                 }
             }
-
         }
     }).unwrap();
 
