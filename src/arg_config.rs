@@ -10,6 +10,12 @@ pub const DEFAULT_CONFIG_FILE_PATH: &str = "/etc/rad/rad.conf";
 #[cfg(target_family = "unix")]
 pub const DEFAULT_DATA_DIR:          &str = "/var/lib/rad";
 
+#[cfg(debug_assertion)]
+const DEFAULT_LOG_LEVEL: log::Level = log::Level::Warn;
+
+#[cfg(not(debug_assertion))]
+const DEFAULT_LOG_LEVEL: log::Level = log::Level::Error;
+
 // TODO: Test for windows
 #[cfg(target_family = "windows")]
 pub const DEFAULT_CONFIG_FILE_PATH: &str = "%program_data%\\rad\\rad.conf";
@@ -28,6 +34,9 @@ pub struct ArgConfig {
 	#[clap(short = 'c', long = "config", default_value = DEFAULT_CONFIG_FILE_PATH)]
 	pub file_config_path: PathBuf,
 
+	#[clap(short = 'l', long = "log-level", default_value_t = DEFAULT_LOG_LEVEL)]
+	pub log_level: log::Level,
+	
 	// #[clap(short = 'D', long = "no-defaults", default_value_t = false)]
 	// pub no_defaults: bool
 }
