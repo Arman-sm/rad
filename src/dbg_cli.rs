@@ -34,11 +34,13 @@ const DEFAULT_HINT_EXT: &str = "mp3";
 
 pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 	let PState { composition_states: ref mut cmp_states, ref mut adapters } = p_state;
+	// The composition state selected by the `sc` command
 	let mut curr_cmp: Option<TWrappedCompositionState> = None;
 	
 	let mut stdout = stdout();
 	let stdin = stdin();
 
+	// The command at hand
 	let mut cmd = String::new();
 
 	println!("{}\n", ASCII_START_BANNER);
@@ -183,8 +185,6 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 						PathBuf::from(path)
 					}
 				};
-
-				dbg!(&path);
 			
 				if !path.exists() { eprintln!("File does not exist."); continue; }
 				

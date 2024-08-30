@@ -199,6 +199,7 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 			let mut change_idx = 0;
 
 			loop {
+				// This section is dedicated to preventing the compositor from computing too much audio as adjustments can be made live.
 				let secs_sent = (buf_computed * frames_in_buf) as f32 / sample_rate as f32;
 				if COMPUTE_AHEAD_SEC < secs_sent - start.elapsed().as_f64() as f32 {
 					sleep(Duration::from_secs_f32(0.05));

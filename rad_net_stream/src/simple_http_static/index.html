@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="shortcut icon" href="favicon.png" type="image/png">
+    <title>RAD Simple HTTP Adapter Player</title>
+
+    <!-- Howler.js import -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.js" integrity="sha512-7Zgn4mmO9yGGB1j9yP0mZvUPWBVg0fCcUMsYUV6FX7XIKQfb/dhGxsKh794YAzXH2F/+Z3eJL4mrTilrT2ZeFQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <script>
+        let player = new Howl({
+            src: ["/audio.wav"],
+            autoplay: false,
+            preload: false,
+            html5: true
+        })
+    </script>
+
+    <style>
+        :root { color-scheme: light dark; }
+
+        body { width: 100vw; height: 100vh; margin: 0; }
+
+        #container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+
+            padding: 5rem;
+            gap: 2.5rem;
+
+            box-sizing: border-box;
+
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #logo-container {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            gap: 2rem;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        #simple-http-logo {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #RAD-logo {
+            aspect-ratio: 1 / 1;
+            filter: opacity(30%);
+        }
+
+        #HTTP-logo {
+            font-family: Verdana;
+            font-size: max(3rem, 6vw);
+            font-weight: 1000;
+            letter-spacing: 5px;
+            margin-top: max(-2rem, -6vh);
+            color: orangered;
+        }
+        
+        /* TODO: Improve light mode */
+        #simple-logo {
+            width: 100%;
+            scale: 0.8;
+            filter: brightness(30%);
+        }
+
+        #play-btn {
+            display: flex;
+            height: 3rem;
+            width: 100%;
+            background-color: hsl(0, 0%, 95%);
+            box-shadow: 5px 10px 20px hsl(0, 0%, 90%);
+            border: 2px solid hsl(0, 0%, 90%);
+            border-radius: 12px;
+        }
+        
+        #play-btn:hover { cursor: pointer; }
+        
+        @media (prefers-color-scheme: dark) {
+            #play-btn {
+                background-color: hsl(0, 0%, 12.5%);
+                box-shadow: 5px 10px 20px hsl(0, 0%, 11%);
+                border: 2px solid hsl(0, 0%, 20%);
+            }
+
+            #simple-logo {
+                filter: invert(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="logo-container">
+            <div style="position: absolute; z-index: -10;">
+                <img id="RAD-logo" src="logo.png" alt="RAD Logo">
+            </div>
+            <div id="simple-http-logo">
+                <img id="simple-logo" src="simple.png" alt="">
+                <span id="HTTP-logo">HTTP</span>
+            </div> 
+        </div>
+        <button id="play-btn" type="button" onclick="player.play()">
+            <span style="font-weight: bolder; margin: auto;">
+                START
+            </span>
+        </button>
+    </div>
+</body>
+</html>

@@ -1,7 +1,16 @@
-use std::{io::{Read, Write}, net::{SocketAddr, TcpListener, TcpStream}, slice::from_raw_parts, sync::{atomic::AtomicBool, Arc, Mutex}, thread};
+use std::{io::{BufRead, Read, Write}, net::{SocketAddr, TcpListener, TcpStream}, slice::from_raw_parts, sync::{atomic::AtomicBool, Arc, Mutex}, thread};
 
 use rad_compositor::{adapter::AdapterHandle, compositor::CompositionBufferNode};
 use crate::utils::wav::gen_wav_header;
+
+fn net_err_log(err: std::io::Error) { log::debug!("Network error occurred: {err:?}"); }
+macro_rules! net_err_handle {
+    ($err:expr) => {{
+        if let Err(e) = $err {
+            net_err_log(e);
+        }
+    }};
+}
 
 /// Size of each buffer in bytes
 const BUF_SIZE: usize = 2048;
@@ -18,9 +27,6 @@ pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, m
     // Reference: Analyzing the same thing done in https://github.com/Arman-sm/Atmosphere via wireshark 
 
     // Initial message: Information about the type of response along with the initial part of the wav file describing it.
-    let mut buf = [0u8; 4096];
-    st.read(&mut buf).unwrap();
-
     // TODO: Parse the request and respond accordingly. (Maybe do compressing if specified)
 
     let mut wav_header = gen_wav_header(sample_rate, channels);
@@ -61,7 +67,7 @@ pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, m
         buf.extend_from_slice("\r\n".as_bytes());
         
         if let Err(e) = st.write_all(&buf) {
-            eprintln!("Network error occurred: {e:?}");
+            log::debug!("Network error occurred: {e:?}");
             return;
         }
 
@@ -71,7 +77,74 @@ pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, m
     }
 }
 
-pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bind_addr: SocketAddr, cmp_node: TCmpNode) -> AdapterHandle {
+
+const HTTP_200_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
+const HTTP_400_RESPONSE: &str = "HTTP/1.1 400 Bad Request\r\n";
+fn handle_conn(mut st: TcpStream, sample_rate: u32, channels: u16, cmp_node: &mut TCmpNode) {
+    macro_rules! static_file_serve {
+        ($path:expr, $mime_type:expr) => {{
+            log::debug!("Sending '{}'.", $path);
+
+            let data = include_bytes!($path);
+
+            net_err_handle!(st.write_all(HTTP_200_RESPONSE.as_bytes()));
+            net_err_handle!(st.write_all(format!("Content-Type: {}\r\nContent-Length: {}\r\n\r\n", $mime_type, data.len()).as_bytes()));
+            net_err_handle!(st.write_all(data));
+        }};
+    }
+
+    let mut buf = [0u8; 4096];
+    st.read(&mut buf).unwrap();
+    
+    log::debug!("Parsing incoming http request.");
+
+    let req_line = match buf.lines().next() {
+        Some(Ok(line)) => line,
+        _ => {
+            log::debug!("Couldn't read the request line of the request.");
+            net_err_handle!(st.write_all(HTTP_400_RESPONSE.as_bytes()));
+            return;
+        }
+    };
+
+    let uri = match req_line.split(' ').nth(1) {
+        Some(url) => url,
+        None => {
+            log::debug!("Couldn't parse the request line of the request.");
+            net_err_handle!(st.write_all(HTTP_400_RESPONSE.as_bytes()));
+            return;
+        }
+    };
+
+    log::debug!("Successfully read the requested URI '{uri}'.");
+
+    match uri {
+        "/audio.wav" => {
+            log::debug!("Sending the audio as wav.");
+
+            *cmp_node = cmp_node.live(sample_rate, channels);
+            
+            let mut cmp = cmp_node.clone();
+        
+            thread::spawn(move || {
+                stream_as_wav(&mut cmp, sample_rate, channels, st);
+            });
+        },
+        "/"            => { static_file_serve!("./simple_http_static/index.html", "text/html"); },
+        //// "/simple.svg"  => { static_file_serve!("./simple_http_static/simple.svg", "image/svg+xml"); }, // Heavy!
+        "/simple.png"  => { static_file_serve!("./simple_http_static/simple.png", "image/png"); },
+        "/favicon.png" => { static_file_serve!("./simple_http_static/favicon.png", "image/png"); },
+        // TODO: Optimize SVG file and use that instead
+        "/logo.png"    => { static_file_serve!("./simple_http_static/logo.png", "image/png"); },
+        _ => {
+            log::debug!("The requested URI is invalid.");
+            net_err_handle!(st.write_all(HTTP_400_RESPONSE.as_bytes()));
+            return;
+        }
+    }
+}
+
+pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bind_addr: SocketAddr, mut cmp_node: TCmpNode) -> AdapterHandle {
     let socket = TcpListener::bind(bind_addr).unwrap();
     let status = Arc::new(Mutex::new("Established".to_owned()));
     let is_closed = Arc::new(AtomicBool::new(false));
@@ -86,13 +159,7 @@ pub fn init_simple_http_adapter(id: String, sample_rate: u32, channels: u16, bin
             if is_closed.load(Ordering::Relaxed) { return; }
             match incoming {
                 Ok(st) => {
-                    let mut cmp = cmp_node.clone();
-                    
-                    cmp = cmp.live(sample_rate, channels);
-                    
-                    thread::spawn(move || {
-                        stream_as_wav(&mut cmp, sample_rate, channels, st);
-                    });
+                    handle_conn(st, sample_rate, channels, &mut cmp_node);
                 },
                 Err(e) => {
                     log::error!("Connection failure happened in adapter '{_id}' with error '{:?}'.", e);
