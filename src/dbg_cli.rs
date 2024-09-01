@@ -28,7 +28,8 @@ fn format_f32_sec(seconds: f32) -> String {
 	((seconds * PRECISION_POW).floor() / PRECISION_POW).to_string()
 }
 
-const QUEUE_SAMPLE_RATE: u32 = 44100;
+// TODO: Save compositors' configurations somewhere and decide based on that.
+const QUEUE_SAMPLE_RATE: u32 = 48000;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
 const DEFAULT_HINT_EXT: &str = "mp3";
 
@@ -69,7 +70,10 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					Some(cmp) => cmp
 				};
 
-				curr_cmp.write().unwrap().is_paused ^= true;
+				let mut cmp = curr_cmp.write().unwrap();
+				let is_paused = cmp.is_paused();
+
+				cmp.set_paused(!is_paused);
 			},
 			["ap", "lst"] | ["adapter", "list"] => {
 				const IS_CLOSED_TRUE_STR:  &str = "Closed";
@@ -242,7 +246,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 				};
 
 				let cmp = curr_cmp.read().unwrap();
-				println!("{}", format_f32_sec(cmp.start_t.elapsed().as_f64() as f32))
+				println!("{}", format_f32_sec(cmp.get_time_millis() as f32 / 1000.0))
 			},
 			_ => println!("Invalid command")
 		}

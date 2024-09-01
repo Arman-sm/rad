@@ -17,7 +17,7 @@ pub fn convert_sample_rates(sample_rate_a: u32, rate_a: usize, sample_rate_b: u3
 pub struct CompositionState {
 	pub id: String,
 	// TODO: Freeze elapsed time until pause is over
-	pub is_paused: bool,
+	pub pause_t: Option<Instant>,
 	pub channels: usize,
 	pub sources: Vec<CompositionSrc>,
 	pub amplification: f32,
@@ -51,9 +51,35 @@ impl CompositionState {
 		});
 	}
 
+	pub fn get_time_millis(&self) -> u64 {
+		self.pause_t.unwrap_or_else(|| Instant::now()).duration_since(self.start_t).as_millis()
+	}
+
 	pub fn set_time_millis(&mut self, millis: u64) {
-		self.start_t = Instant::now() - Duration::from_millis(millis);
+		let now = Instant::now();
+
+		if let Some(ref mut pause_t) = self.pause_t {
+			let pause_gap = pause_t.duration_since(self.start_t);
+			*pause_t = now - Duration::from_millis(millis.min(pause_gap.as_millis()));
+		}
+		
+		self.start_t = now - Duration::from_millis(millis);
 		self.config_change_idx += 1;
+	}
+
+	pub fn is_paused(&self) -> bool {
+		self.pause_t.is_some()
+	}
+
+	pub fn set_paused(&mut self, state: bool) {
+		if self.is_paused() == state { return; }
+		
+		if let Some(ref pause_t) = self.pause_t {
+			self.set_time_millis(pause_t.duration_since(self.start_t).as_millis());
+			self.pause_t = None;
+		} else {
+			self.pause_t = Some(Instant::now());
+		}
 	}
 }
 
@@ -66,7 +92,7 @@ impl Default for CompositionState {
 
 		CompositionState {
 			id,
-			is_paused: true,
+			pause_t: None,
 			channels: 2,
 			sources: vec![],
 			amplification: 1.5,

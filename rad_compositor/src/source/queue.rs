@@ -22,6 +22,14 @@ impl QueueSrc {
     pub fn pop(&mut self) -> Option<Source> {
         self.sources.pop_back()
     }
+
+    pub fn sources(&self) -> &LinkedList<Source> {
+        &self.sources
+    }
+
+    pub fn sources_mut(&mut self) -> &mut LinkedList<Source> {
+        &mut self.sources
+    }
 }
 
 impl BaseSource for QueueSrc {

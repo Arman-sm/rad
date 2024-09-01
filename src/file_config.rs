@@ -43,13 +43,18 @@ fn create_corresponding_composition_state(conf: &Composition) -> CompositionStat
 	if conf.id.is_empty() {
 		panic!("Composition ID can't be left empty.")
 	}
-	
-	CompositionState {
+
+	let mut res = CompositionState {
 		id: conf.id.clone(),
 		amplification: conf.amp,
-		is_paused: conf.pause,
 		..Default::default()
+	};
+
+	if conf.pause {
+		res.pause_t = Some(res.start_t);
 	}
+
+	res
 }
 
 fn create_compositions(compositions: &Vec<Composition>) -> Vec<TWrappedCompositionState> {

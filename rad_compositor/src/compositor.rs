@@ -4,7 +4,7 @@ use coarsetime::Instant;
 
 use crate::{composition::{convert_sample_rates, CompositionState, TWrappedCompositionState}, source::{BaseSource, Source, TSample}};
 
-const COMPUTE_AHEAD_SEC: f32 = 0.15;
+const COMPUTE_AHEAD_SEC: f32 = 0.3;
 
 /// A linked list like structure for streaming audio that supports multithreading. <br/>
 /// 
@@ -209,7 +209,7 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 				i += 1;
 				
 				let mut cmp = cmp_state.write().unwrap();
-				if cmp.is_paused {
+				if cmp.is_paused() {
 					drop(cmp);
 					sleep(Duration::from_secs_f32(0.05));
 					continue;
