@@ -122,7 +122,7 @@ fn handle_conn(mut st: TcpStream, sample_rate: u32, channels: u16, cmp_node: &mu
         "/audio.wav" => {
             log::debug!("Sending the audio as wav.");
 
-            *cmp_node = cmp_node.live(sample_rate, channels);
+            CompositionBufferNode::set_to_live(cmp_node, sample_rate, channels);
             
             let mut cmp = cmp_node.clone();
         

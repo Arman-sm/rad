@@ -1,4 +1,4 @@
-use std::{mem, sync::{Arc, Condvar, Mutex}, thread::{self, sleep}, time::Duration};
+use std::{sync::{Arc, Condvar, Mutex}, thread::{self, sleep}, time::Duration};
 
 use coarsetime::Instant;
 
@@ -58,47 +58,41 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		&self.buf
 	}
 
-	/// Gives the last buffer generated in the list.
-	pub fn head(&self) -> Arc<Self> {
-		let mut head = self.next();
-		
+	/// Sets the current node to the last node generated.
+	pub fn set_to_head(node: &mut Arc<CompositionBufferNode<BUF_SIZE>>) {
 		loop {
-			let next = head.next.lock().unwrap().clone();
-			if let Some(node) = next {
-				head = node;
+			let next = node.next.lock().unwrap().clone();
+			if let Some(next_node) = next {
+				*node = next_node;
 			} else {
 				break;
 			}
 		}
-
-		head
 	}
 
-	pub fn live(&self, sample_rate: u32, channels: u16) -> Arc<Self> {
+	pub fn set_to_live(node: &mut Arc<CompositionBufferNode<BUF_SIZE>>, sample_rate: u32, channels: u16) {
 		let computed_buffers_ahead_of_time = (COMPUTE_AHEAD_SEC * sample_rate as f32) as usize / (BUF_SIZE / channels as usize);
 
-		let mut res = self.next();
-
 		let mut i = 1;
-		let mut head = self.next();
+		let mut head = node.clone();
 
 		loop {
 			let next = head.next.lock().unwrap().clone();
-			if let Some(node) = next {
-				head = node;
+			if let Some(next_node) = next {
+				head = next_node;
 			} else {
 				if i < computed_buffers_ahead_of_time {
 					for _ in 0..(computed_buffers_ahead_of_time - i) {
-						head.next();
+						head = head.next();
 					}
 				}
 
-				return res;
+				return;
 			}
 
 			i += 1;
 			if computed_buffers_ahead_of_time < i {
-				res = res.next()
+				*node = node.next()
 			}
 		}
 	}
