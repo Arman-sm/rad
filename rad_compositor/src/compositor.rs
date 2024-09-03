@@ -98,8 +98,10 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	}
 }
 
-fn approximate_frame_linear(src: &mut Source, sample_rate: u32, rate: usize, offset: isize) -> Option<Vec<f32>> {
-	let conv = (rate * src.sample_rate() as usize) as f64 / sample_rate as f64 + offset as f64;
+pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: u32, rate: usize, offset: isize) -> Option<Vec<f32>> {
+	let conv = (rate * src.sample_rate() as usize) as f64 / into_sample_rate as f64 + offset as f64;
+	assert!(0.0 <= conv);
+
 	let a = conv.floor() as usize;
 	let diff = conv - conv.floor();
 
@@ -192,7 +194,7 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 	let thread_handle = thread::Builder::new()
 		.name(format!("cmp-{}", cmp_id))
 		.spawn(move || {
-			let start = Instant::now();
+			let mut start = Instant::now();
 
 			let mut node = _first_node;
 			let frames_in_buf = BUF_SIZE / channels;
@@ -223,6 +225,7 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 				}
 
 				if change_idx < cmp.config_change_idx {
+					start = cmp.start_t;
 					secs_sent = cmp.start_t.elapsed().as_f64() as f32;
 					frame_i = (secs_sent * sample_rate as f32) as usize;
 					change_idx = cmp.config_change_idx;

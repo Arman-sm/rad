@@ -48,7 +48,7 @@ impl<const BUF_SIZE: usize> CompositionRegistry<BUF_SIZE> {
 
         }
 
-        let cmp_state = self.compositions.iter().find(|d| d.read().unwrap().get_id() == cmp_id)?.clone();
+        let cmp_state = self.compositions.iter().find(|d| d.read().unwrap().id == cmp_id)?.clone();
 
         let (compositor, node) = init_compositor_thread::<BUF_SIZE>(sample_rate, cmp_state);
 

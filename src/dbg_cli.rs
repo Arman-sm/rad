@@ -28,7 +28,6 @@ fn format_f32_sec(seconds: f32) -> String {
 	((seconds * PRECISION_POW).floor() / PRECISION_POW).to_string()
 }
 
-
 const QUEUE_SAMPLE_RATE: u32 = 48000;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
 const DEFAULT_HINT_EXT: &str = "mp3";

@@ -85,7 +85,7 @@ impl BaseSource for IterSrc {
 			// In this case, `iter_func` has ended so there won't be any data to return
 			if !self.load_buf(frame_i) {
 				// eprintln!("Failed to load the next buffer");
-				return None
+				return None;
 			}
 		}
 
@@ -118,10 +118,10 @@ impl IterSrc {
 		// if frame_i * self.channels < self.buf.start_sample_i {
 		if !self.cache.is_empty() && frame_i * self.channels < self.cache.last().unwrap().end() {
 			self.buf = self.cache[self.search_cache_for_buf(frame_i * self.channels)].clone();
-			return true
+			return true;
 		}
 
-		if self.has_ended { return false }
+		if self.has_ended { return false; }
 
 		while self.buf.end() < (frame_i + 1) * self.channels {
 			let _data = call_iter_src(&mut self.func, &mut self.has_ended);
@@ -131,13 +131,14 @@ impl IterSrc {
 				self.cache.push(self.buf.clone());
 			} else {
 				self.has_ended = true;
-				return false
+				return false;
 			}
 		}
 
 		assert!(self.buf.samples.len() % self.channels == 0);
 		assert!(self.buf.len() != 0);
-		return true
+		
+		true
 	}
 
 	/// This function will panic if `self.cache` doesn't contain `frame_i`

@@ -6,7 +6,7 @@ use crate::source::{BaseSource, Source};
 
 pub type TWrappedCompositionState = Arc<RwLock<CompositionState>>;
 
-static COMPOSITOR_ID_TO_ALLOCATE: Mutex<u16> = Mutex::new(0);
+static COMPOSITION_ID_TO_ALLOCATE: Mutex<u16> = Mutex::new(0);
 pub struct SrcCompositionData { pub frame_offset: isize, pub amplification: f32 }
 pub struct CompositionSrc { pub src: Source, pub composition_data: SrcCompositionData }
 
@@ -15,7 +15,6 @@ pub fn convert_sample_rates(sample_rate_a: u32, rate_a: usize, sample_rate_b: u3
 }
 
 pub struct CompositionState {
-	// TODO: Make the `id` field private to prevent it from changing
 	pub id: String,
 	pub pause_t: Option<Instant>,
 	pub channels: usize,
@@ -81,16 +80,12 @@ impl CompositionState {
 			self.pause_t = Some(Instant::now());
 		}
 	}
-
-	pub fn get_id(&self) -> &str{
-		&self.id
-	}
 }
 
 impl Default for CompositionState {
 	fn default() -> Self {
-		let mut id_handle = COMPOSITOR_ID_TO_ALLOCATE.lock().unwrap();
-		let id = format!("DefaultCompositor{}", id_handle);
+		let mut id_handle = COMPOSITION_ID_TO_ALLOCATE.lock().unwrap();
+		let id = format!("cmp-{}", id_handle);
 
 		*id_handle += 1;
 

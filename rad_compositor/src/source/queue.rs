@@ -1,5 +1,7 @@
 use std::collections::LinkedList;
 
+use crate::compositor::approximate_frame_linear;
+
 use super::{BaseSource, Source, TSample};
 
 pub struct QueueSrc {
@@ -59,9 +61,14 @@ impl BaseSource for QueueSrc {
     }
 
     fn get_by_frame_i(&mut self, frame_i: usize) -> Option<Vec<TSample>> {
-        let mut offset = 0;
+        let mut offset: usize = 0;
         for src in self.sources.iter_mut() {
-            let frame = src.get_by_frame_i(frame_i - offset);
+            let frame = if src.sample_rate() == self.sample_rate {
+                src.get_by_frame_i(frame_i - offset)
+            } else {
+                approximate_frame_linear(src, self.sample_rate, frame_i - offset, 0)
+            };
+            
             if frame.is_some() { return frame; }
             
             offset += src.duration().unwrap();
