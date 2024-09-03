@@ -11,10 +11,10 @@ pub const DEFAULT_CONFIG_FILE_PATH: &str = "/etc/rad/rad.conf";
 pub const DEFAULT_DATA_DIR:          &str = "/var/lib/rad";
 
 #[cfg(debug_assertion)]
-const DEFAULT_LOG_LEVEL: log::Level = log::Level::Warn;
+const DEFAULT_LOG_LEVEL: log::Level = log::Level::Debug;
 
 #[cfg(not(debug_assertion))]
-const DEFAULT_LOG_LEVEL: log::Level = log::Level::Error;
+const DEFAULT_LOG_LEVEL: log::Level = log::Level::Warn;
 
 // TODO: Test for windows
 #[cfg(target_family = "windows")]
