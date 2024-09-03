@@ -27,7 +27,7 @@ For the program to work you must give it some arguments:
 | -D | --enable-dbg-cli | Enable the debug cli | true (temporarily) |
 | -d | --data-dir | Sets the directory in which the program will be saving its data in | Windows: %PROGRAMDATA%\rad\data\ \| UNIX: /var/lib/rad/ |
 | -c | --config | Path to the configuration file | Windows: %PROGRAMDATA%\rad\rad.conf \| UNIX: /etc/rad/rad.conf |
-| -l | --log | Program log level (trace, debug, warn, error) | debug: debug \| release: warn |
+| -l | --log-level | Program log level (trace, debug, warn, error) | debug: debug \| release: warn |
 
 ## Concepts
 These concepts exist throughout the project and some are even accessible and are interacted with directly using the debug cli
