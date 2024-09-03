@@ -27,7 +27,7 @@ pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: u32, channels: u16, m
     // Reference: Analyzing the same thing done in https://github.com/Arman-sm/Atmosphere via wireshark 
 
     // Initial message: Information about the type of response along with the initial part of the wav file describing it.
-    // TODO: Parse the request and respond accordingly. (Maybe do compressing if specified)
+    // TODO: Maybe do compressing if specified.
 
     let mut wav_header = gen_wav_header(sample_rate, channels);
     let buf_len_hex = format!("{:x}\r\n", wav_header.len());

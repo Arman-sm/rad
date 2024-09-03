@@ -14,7 +14,7 @@ const HELP_PAGE: &str =
 > sc {cmp-id} | set-cmp {cmp-id}                  -> Selects the composition for use with other commands
 > amp                                             -> Outputs amplification of the selected composition
 > amp {amp}                                       -> Changes amplification of the selected composition
-> ap lst | adapter list                           -> Lists the adapters
+> ap lst                                          -> Lists the adapters
 > ap del {ap-id}                                  -> Deletes an adapter by ID
 > t | time                                        -> Time value of a composition in seconds
 > go {time(second)}                               -> Sets timeline value
@@ -28,13 +28,13 @@ fn format_f32_sec(seconds: f32) -> String {
 	((seconds * PRECISION_POW).floor() / PRECISION_POW).to_string()
 }
 
-// TODO: Save compositors' configurations somewhere and decide based on that.
+
 const QUEUE_SAMPLE_RATE: u32 = 48000;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
 const DEFAULT_HINT_EXT: &str = "mp3";
 
 pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
-	let PState { composition_states: ref mut cmp_states, ref mut adapters } = p_state;
+	let PState { ref mut cmp_reg, ref mut adapters } = p_state;
 	// The composition state selected by the `sc` command
 	let mut curr_cmp: Option<TWrappedCompositionState> = None;
 	
@@ -63,7 +63,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 			["help"] => {
 				println!("{}", HELP_PAGE);
 			},
-			// pause / play
+			// pause / play["adapter", "list"]
 			["p"] => {
 				let curr_cmp = match &curr_cmp {
 					None => { eprintln!("Please select a composition first."); continue; },
@@ -75,7 +75,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 
 				cmp.set_paused(!is_paused);
 			},
-			["ap", "lst"] | ["adapter", "list"] => {
+			["ap", "lst"] => {
 				const IS_CLOSED_TRUE_STR:  &str = "Closed";
 				const IS_CLOSED_FALSE_STR: &str = "Open";
 
@@ -131,10 +131,8 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 			},
 			// Selects a composition for later use with other commands.
 			["sc", id] | ["set-cmp", id] => {
-				let c = cmp_states
-					.iter()
-					.find_map(|c| if c.read().unwrap().id == id { Some(c.clone()) } else { None });
-				
+				let c = cmp_reg.find_composition(id).cloned();
+
 				if c.is_none() {
 					eprintln!("No composition exists with this ID.");
 					continue;

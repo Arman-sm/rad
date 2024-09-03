@@ -15,8 +15,8 @@ pub fn convert_sample_rates(sample_rate_a: u32, rate_a: usize, sample_rate_b: u3
 }
 
 pub struct CompositionState {
+	// TODO: Make the `id` field private to prevent it from changing
 	pub id: String,
-	// TODO: Freeze elapsed time until pause is over
 	pub pause_t: Option<Instant>,
 	pub channels: usize,
 	pub sources: Vec<CompositionSrc>,
@@ -35,7 +35,7 @@ impl CompositionState {
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,
-				frame_offset: -(self.start_t.elapsed().as_f64() * src.sample_rate() as f64) as isize
+				frame_offset: (self.start_t.elapsed().as_f64() * src.sample_rate() as f64) as isize
 			},
 			src,
 		});
@@ -80,6 +80,10 @@ impl CompositionState {
 		} else {
 			self.pause_t = Some(Instant::now());
 		}
+	}
+
+	pub fn get_id(&self) -> &str{
+		&self.id
 	}
 }
 

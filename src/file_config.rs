@@ -1,6 +1,6 @@
 use std::{collections::HashSet, fs::File, io::Read, net::ToSocketAddrs, sync::{Arc, RwLock}};
 
-use rad_compositor::{adapter::AdapterHandle, composition::{CompositionState, TWrappedCompositionState}, compositor::{CompositionBufferNode, init_compositor_thread}};
+use rad_compositor::{adapter::AdapterHandle, cmp_reg::CompositionRegistry, composition::CompositionState};
 // use rad_host_playback::{init_host_playback_default, playback::HostPlayback};
 use rad_net_stream::{init_simple_http_adapter, init_udp_adapter};
 use serde::Deserialize;
@@ -35,7 +35,7 @@ struct OutputEndpoint {
 }
 
 pub struct PState  {
-	pub composition_states: Vec<TWrappedCompositionState>,
+	pub cmp_reg: CompositionRegistry<1024>,
 	pub adapters: Vec<AdapterHandle>
 }
 
@@ -57,9 +57,9 @@ fn create_corresponding_composition_state(conf: &Composition) -> CompositionStat
 	res
 }
 
-fn create_compositions(compositions: &Vec<Composition>) -> Vec<TWrappedCompositionState> {
+fn create_composition_registry<const BUF_SIZE: usize>(compositions: &Vec<Composition>) -> CompositionRegistry<BUF_SIZE> {
 	let mut ids = HashSet::new();
-	let mut states = Vec::new();
+	let mut reg = CompositionRegistry::new();
 
 	for cmp_conf in compositions.iter() {
 		let cmp = create_corresponding_composition_state(cmp_conf);
@@ -69,43 +69,14 @@ fn create_compositions(compositions: &Vec<Composition>) -> Vec<TWrappedCompositi
 			panic!("Duplicate composition IDs were found, composition IDs must be unique.");
 		}
 
-		states.push(Arc::new(RwLock::new(cmp)));
+		reg.push_composition(Arc::new(RwLock::new(cmp)));
 	}
 
-	states
+	reg
 }
 
-struct WCmpBuf {
-	buf: Arc<CompositionBufferNode<1024>>,
-	id: String,
-	sample_rate: u32,
-}
-
-fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions: &mut Vec<TWrappedCompositionState>, end_conf: &OutputEndpoint) -> AdapterHandle {
-	
-	let w_buf = buffers
-		.iter()
-		.find(|b| b.id == end_conf.cast && b.sample_rate == end_conf.sample_rate);
-
-	let buf= match w_buf {
-		Some(b) => b.buf.clone(),
-		None => {
-			let cmp = compositions
-				.iter()
-				.find(|c| c.read().unwrap().id == end_conf.cast)
-				.expect(format!("Composition '{}' was not found. (set as 'cast' in an endpoint config)", end_conf.id).as_str());
-
-			let b = init_compositor_thread(44100, cmp.clone());
-
-			buffers.push(WCmpBuf {
-				id: end_conf.cast.clone(),
-				sample_rate: end_conf.sample_rate,
-				buf: b.clone()
-			});
-
-			b
-		}
-	};
+fn create_corresponding_output_endpoint(cmp_reg: &mut CompositionRegistry<1024>, end_conf: &OutputEndpoint) -> AdapterHandle {
+	let buf = cmp_reg.get_active_buf(&end_conf.cast, end_conf.sample_rate).unwrap();
 	
 	match end_conf.adapter.as_str() {
 		"net-udp" => {
@@ -174,10 +145,9 @@ fn create_corresponding_output_endpoint(buffers: &mut Vec<WCmpBuf>, compositions
 }
 
 // For now only output endpoints will be supported but support endpoints for receiving audio from devices like microphones on external devices may be implemented in the feature but isn't a planned feature yet.
-fn create_endpoints(compositions: &mut Vec<TWrappedCompositionState>, endpoints_config: &Endpoints) -> Vec<AdapterHandle> {
+fn create_endpoints(cmp_reg: &mut CompositionRegistry<1024>, endpoints_config: &Endpoints) -> Vec<AdapterHandle> {
 	let mut adapters = Vec::with_capacity(endpoints_config.out.len());
 	let mut ids = HashSet::new();
-	let mut buffers = Vec::new();
 
 	for end_conf in endpoints_config.out.iter() {
 		if end_conf.id.is_empty() {
@@ -190,7 +160,7 @@ fn create_endpoints(compositions: &mut Vec<TWrappedCompositionState>, endpoints_
 		}
 
 		adapters.push(
-			create_corresponding_output_endpoint(&mut buffers, compositions, &end_conf)
+			create_corresponding_output_endpoint(cmp_reg, &end_conf)
 		);		
 	}
 
@@ -217,12 +187,12 @@ pub fn init_with_file_config(path: &str) -> PState {
 			Err(_) => panic!("Failed to parse '{path}'.")
 		};
 	
-	let mut cmp_states = create_compositions(&config.composition);
+	let mut cmp_reg = create_composition_registry(&config.composition);
 
-	let out_adapters = create_endpoints(&mut cmp_states, &config.endpoints);
+	let out_adapters = create_endpoints(&mut cmp_reg, &config.endpoints);
 
 	PState {
-		composition_states: cmp_states,
+		cmp_reg,
 		adapters: out_adapters,
 	}
 }
