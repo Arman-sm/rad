@@ -16,8 +16,8 @@ rad_host_playback = { path = "./rad_host_playback" }
 rad_net_stream = { path = "./rad_net_stream" }
 rad_compositor = { path = "./rad_compositor" }
 
-clap = { version = "4.4.14", features = ["derive", "env"] }
+clap = { version = "4.5.16", features = ["derive", "env"] }
 log = "0.4.20"
 simple_logger = "5.0.0"
-toml = "0.8.14"
-serde = { version = "1.0.203", features = ["derive"] }
+toml = "0.8.19"
+serde = { version = "1.0.209", features = ["derive"] }

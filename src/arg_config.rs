@@ -18,9 +18,9 @@ const DEFAULT_LOG_LEVEL: log::Level = log::Level::Warn;
 
 // TODO: Test for windows
 #[cfg(target_family = "windows")]
-pub const DEFAULT_CONFIG_FILE_PATH: &str = "%program_data%\\rad\\rad.conf";
+pub const DEFAULT_CONFIG_FILE_PATH: &str = "C:\\ProgramData\\rad\\rad.conf";
 #[cfg(target_family = "windows")]
-pub const DEFAULT_DATA_DIR:          &str = "%program_data%\\rad\\data";
+pub const DEFAULT_DATA_DIR:          &str = "C:\\ProgramData\\rad\\data";
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
