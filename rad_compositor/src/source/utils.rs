@@ -1,16 +1,79 @@
-use std::{fs::{read_dir, File}, path::{Path, PathBuf}};
+use std::{fs::read_dir, ops::Range, path::{Path, PathBuf}};
 
-use crate::sources::symphonia::init_symphonia_src;
+use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
 
-use super::{iter::{IterSrcFunc, TIterSrcFuncReturn}, queue::QueueSrc};
+use crate::source::file::FileSource;
 
-pub const DEFAULT_HINT_EXT: &str = "mp3";
+use super::{iter::{IterSrcFunc, TIterSrcFuncReturn}, queue::QueueSrc, TSample};
 
-pub fn audio_mime_subtype_from_ext(ext: &str) -> &str {
-	match ext  {
-		"mp3" => "mpeg",
-		"wave" => "wav",
-		any => any
+#[derive(Clone)]
+pub struct SampleBuf {
+	pub samples: Vec<TSample>,
+	start_i: usize,
+}
+
+impl SampleBuf {
+	pub fn new(start_i: usize, samples: Vec<TSample>) -> Self {
+		SampleBuf {
+			start_i,
+			samples
+		}
+	}
+
+	pub fn start(&self) -> usize {
+		self.start_i
+	}
+
+	pub fn end(&self) -> usize {
+		self.start_i + self.samples.len()
+	}
+
+	pub fn len(&self) -> usize {
+		self.samples.len()
+	}
+
+	pub fn range(&self) -> Range<usize> {
+		self.start_i..self.end()
+	}
+
+	pub fn from_audio_buf_ref(start_i: usize, audio_buf_ref: &AudioBufferRef) -> SampleBuf {
+		let f32_buf;
+		
+		match audio_buf_ref {
+            AudioBufferRef::U8(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::U16(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::U24(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::U32(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::S8(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::S16(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::S24(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::S32(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+            AudioBufferRef::F32(buf) => { return Self::from_audio_buf(start_i, &buf); },
+            AudioBufferRef::F64(buf) => { f32_buf = buf.make_equivalent::<f32>() },
+        };
+
+		Self::from_audio_buf(start_i, &f32_buf)
+	}
+
+	pub fn from_audio_buf(start_i: usize, samp_buf: &AudioBuffer<f32>) -> Self {
+		let channels = samp_buf.spec().channels.count();
+		let frames = samp_buf.frames();
+		let samples = frames * channels;
+
+		let mut buf = Vec::with_capacity(samples);
+
+		let channel_bufs = (0..channels).into_iter().map(|ch_i| samp_buf.chan(ch_i)).collect::<Vec<_>>();
+
+		for frame_i in 0..frames {
+			for ch_i in 0..channels {
+				buf.push(channel_bufs[ch_i][frame_i]);
+			}
+		}
+
+		SampleBuf {
+			samples: buf,
+			start_i
+		}
 	}
 }
 
@@ -36,14 +99,8 @@ pub fn queue_from_directory(path: &Path, sample_rate: u32, depth: u8) -> Option<
 	let file_paths = find_files(path, depth)?;
 	for file_path in file_paths {
 		log::debug!("Reading '{}'", file_path.display());
-		let ext: &str = match file_path.extension() {
-			Some(ext) => { ext.try_into().unwrap_or(DEFAULT_HINT_EXT) },
-			None => DEFAULT_HINT_EXT
-		};
-		let mime_type = format!("audio/{}", audio_mime_subtype_from_ext(ext));
-		let file = File::open(file_path).ok()?;
 
-		let src = init_symphonia_src(file, &mime_type).ok()?;
+		let src = FileSource::new(file_path)?;
 
 		queue.push(src.into());
 	}

@@ -1,6 +1,6 @@
-use std::{ops::Range, sync::Mutex};
+use std::sync::Mutex;
 
-use super::{BaseSource, TSample};
+use super::{utils::SampleBuf, BaseSource, TSample};
 
 pub type TIterSrcFuncReturn = Option<Vec<TSample>>;
 pub type IterSrcFunc = dyn FnMut() -> TIterSrcFuncReturn + Send + Sync;
@@ -18,33 +18,6 @@ fn call_iter_src(func: &mut Box<IterSrcFunc>, has_ended: &mut bool) -> TIterSrcF
 	payload
 }
 
-#[derive(Clone)]
-pub struct SampleBuff {
-	samples: Vec<TSample>,
-	start_sample_i: usize,
-}
-
-impl SampleBuff {
-	pub fn new(start: usize, samples: Vec<TSample>) -> Self {
-		SampleBuff {
-			start_sample_i: start,
-			samples
-		}
-	}
-
-	pub fn end(&self) -> usize {
-		self.start_sample_i + self.samples.len()
-	}
-
-	pub fn len(&self) -> usize {
-		self.samples.len()
-	}
-
-	pub fn range(&self) -> Range<usize> {
-		self.start_sample_i..self.end()
-	}
-}
-
 static SRC_ALLOCATED_IDX: Mutex<u16> = Mutex::new(0);
 
 pub struct IterSrc {
@@ -53,8 +26,8 @@ pub struct IterSrc {
 	pub index: u16,
 	has_ended: bool,
 	// ! The buffers in cache have to be sorted, as binary search will be used when searching them.
-	cache: Vec<SampleBuff>,
-	buf: SampleBuff,
+	cache: Vec<SampleBuf>,
+	buf: SampleBuf,
 	func: Box<IterSrcFunc>,
 
 }
@@ -89,7 +62,7 @@ impl BaseSource for IterSrc {
 			}
 		}
 
-		let buff_start_idx = frame_i * self.channels - self.buf.start_sample_i;
+		let buff_start_idx = frame_i * self.channels - self.buf.start();
 		Some(self.buf.samples[buff_start_idx..buff_start_idx + self.channels].to_vec())
 	}
 }
@@ -106,7 +79,7 @@ impl IterSrc {
 			index: *last_index,
 			has_ended: false,
 			cache: Vec::new(),
-			buf: SampleBuff::new(0, Vec::new()),
+			buf: SampleBuf::new(0, Vec::new()),
 			func
 		}
 	}
@@ -127,7 +100,7 @@ impl IterSrc {
 			let _data = call_iter_src(&mut self.func, &mut self.has_ended);
 
 			if let Some(data) = _data {
-				self.buf = SampleBuff::new(self.buf.end(), data);
+				self.buf = SampleBuf::new(self.buf.end(), data);
 				self.cache.push(self.buf.clone());
 			} else {
 				self.has_ended = true;
@@ -153,7 +126,7 @@ impl IterSrc {
 			let idx = (start + end) / 2;
 			let selected = &self.cache[idx];
 
-			if i < selected.start_sample_i { end = idx - 1 }
+			if i < selected.start() { end = idx - 1 }
 			else if i >= selected.end() { start = idx + 1 }
 			else { break idx; }
 		};

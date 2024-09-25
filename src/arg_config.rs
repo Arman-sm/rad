@@ -8,19 +8,19 @@ pub const DEFAULT_CONFIG_FILE_PATH: &str = "/etc/rad/rad.conf";
 // ! The feature of saving audios has been removed temporarily
 // This is where the server would keep its saved audios
 #[cfg(target_family = "unix")]
-pub const DEFAULT_DATA_DIR:          &str = "/var/lib/rad";
+pub const DEFAULT_DATA_DIR:         &str = "/var/lib/rad";
 
-#[cfg(debug_assertion)]
+#[cfg(debug_assertions)]
 const DEFAULT_LOG_LEVEL: log::Level = log::Level::Debug;
 
-#[cfg(not(debug_assertion))]
+#[cfg(not(debug_assertions))]
 const DEFAULT_LOG_LEVEL: log::Level = log::Level::Warn;
 
 // TODO: Test for windows
 #[cfg(target_family = "windows")]
 pub const DEFAULT_CONFIG_FILE_PATH: &str = "C:\\ProgramData\\rad\\rad.conf";
 #[cfg(target_family = "windows")]
-pub const DEFAULT_DATA_DIR:          &str = "C:\\ProgramData\\rad\\data";
+pub const DEFAULT_DATA_DIR:         &str = "C:\\ProgramData\\rad\\data";
 
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]

@@ -1,6 +1,6 @@
-use std::{env, fs::{canonicalize, File}, io::{stdin, stdout, Write}, path::PathBuf};
+use std::{env, fs::canonicalize, io::{stdin, stdout, Write}, path::PathBuf};
 
-use rad_compositor::{composition::TWrappedCompositionState, source::utils::{audio_mime_subtype_from_ext, queue_from_directory}, sources::symphonia::init_symphonia_src};
+use rad_compositor::{composition::TWrappedCompositionState, source::{file::FileSource, utils::queue_from_directory}};
 
 use crate::{arg_config::ArgConfig, file_config::PState};
 
@@ -30,7 +30,6 @@ fn format_f32_sec(seconds: f32) -> String {
 
 const QUEUE_SAMPLE_RATE: u32 = 48000;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
-const DEFAULT_HINT_EXT: &str = "mp3";
 
 pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 	let PState { ref mut cmp_reg, ref mut adapters } = p_state;
@@ -52,7 +51,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 		cmd.clear();
 		stdin.read_line(&mut cmd).unwrap();
 		// Removes the excess '\n' at the end of the line
-		cmd.remove(cmd.len() - 1);
+		cmd.pop();
 
 		if cmd.is_empty() {
 			continue;
@@ -201,27 +200,25 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					continue;
 				}
 	
-				log::debug!("Opening '{:?}'", canonicalize(&path).unwrap());
-				let file = File::open(&path).unwrap();
+				log::debug!("Opening file '{:?}' as a source.", canonicalize(&path).unwrap());
 				
 				log::debug!("Initializing the source");
-				let ext: &str = match path.extension() {
-					Some(ext) => { ext.try_into().unwrap_or(DEFAULT_HINT_EXT) },
-					None => DEFAULT_HINT_EXT
-				};
 
-				let mime_subtype = audio_mime_subtype_from_ext(ext);
-
-				let src = match init_symphonia_src(file, format!("audio/{mime_subtype}").as_str()) {
-					Ok(_src) => _src,
-					Err(err) => {
-						eprintln!("Failed to create the source.");
-						log::error!("Initialization failed with error '{:?}'.", err);
-
-						continue;
-					}
-				};
-				curr_cmp.write().unwrap().push_src_default(src.into())
+				// let src = match init_symphonia_src(file, format!("audio/{mime_subtype}").as_str()) {
+				// 	Ok(_src) => _src,
+				// 	Err(err) => {
+				// 		eprintln!("Failed to create the source.");
+				
+				// 		continue;
+				// 	}
+				// };
+				
+				if let Some(src) = FileSource::new(path) {
+					curr_cmp.write().unwrap().push_src_default(src.into());
+				} else {
+					eprintln!("Failed to create the source.");
+					// log::error!("Source initialization failed with error '{:?}'.", err);
+				}
 			},
 			["go", _sec] => {
 				let curr_cmp = match &curr_cmp {
