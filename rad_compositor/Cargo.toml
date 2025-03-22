@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# dasp_sample = "0.11.0"
-coarsetime = "0.1.34"
-log = "0.4.22"
-# minimp3 = "0.5.1"
-# puremp3 = "0.1.0"
-symphonia = { version = "0.5.4", features = ["mpa"] }
+coarsetime = "0.1.*"
+futures = "0.3.31"
+log = "0.4.*"
+symphonia = { version = "0.5.*", features = ["mpa"] }
+tokio = "1.42.*"
+rad_storage = { path = "../rad_storage" }

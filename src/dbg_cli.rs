@@ -1,6 +1,6 @@
 use std::{env, fs::canonicalize, io::{stdin, stdout, Write}, path::PathBuf};
 
-use rad_compositor::{composition::TWrappedCompositionState, source::{file::FileSource, utils::queue_from_directory}};
+use rad_compositor::{composition::TWrappedCompositionState, source::{formatted::FormattedStreamSource, utils::sample_buf::queue_from_directory, TFrameIdx}};
 
 use crate::{arg_config::ArgConfig, file_config::PState};
 
@@ -28,11 +28,11 @@ fn format_f32_sec(seconds: f32) -> String {
 	((seconds * PRECISION_POW).floor() / PRECISION_POW).to_string()
 }
 
-const QUEUE_SAMPLE_RATE: u32 = 48000;
+const QUEUE_SAMPLE_RATE: TFrameIdx = 48000;
 const OPEN_DIR_SEARCH_DEPTH: u8 = u8::MAX;
 
 pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
-	let PState { ref mut cmp_reg, ref mut adapters } = p_state;
+	let PState { ref mut cmp_reg, ref mut adapters, remote_addr: _remote_addr } = p_state;
 	// The composition state selected by the `sc` command
 	let mut curr_cmp: Option<TWrappedCompositionState> = None;
 	
@@ -109,7 +109,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 					Some(cmp) => cmp
 				};
 
-				println!("{}", curr_cmp.read().unwrap().amplification);
+				println!("{}", curr_cmp.read().unwrap().get_amplification());
 			},
 			["amp", _amp] => {
 				let curr_cmp = match &curr_cmp {
@@ -119,7 +119,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 
 				match _amp.parse::<f32>() {
 					Ok(amp) => {
-						curr_cmp.write().unwrap().amplification = amp;
+						curr_cmp.write().unwrap().set_amplification(amp);
 					},
 					Err(_) => {
 						eprintln!("Invalid value for second");
@@ -129,7 +129,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 			},
 			// Selects a composition for later use with other commands.
 			["sc", id] | ["set-cmp", id] => {
-				let c = cmp_reg.find_composition(id).cloned();
+				let c = cmp_reg.lock().unwrap().find_composition(id).cloned();
 
 				if c.is_none() {
 					eprintln!("No composition exists with this ID.");
@@ -203,17 +203,8 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 				log::debug!("Opening file '{:?}' as a source.", canonicalize(&path).unwrap());
 				
 				log::debug!("Initializing the source");
-
-				// let src = match init_symphonia_src(file, format!("audio/{mime_subtype}").as_str()) {
-				// 	Ok(_src) => _src,
-				// 	Err(err) => {
-				// 		eprintln!("Failed to create the source.");
 				
-				// 		continue;
-				// 	}
-				// };
-				
-				if let Some(src) = FileSource::new(path) {
+				if let Some(src) = FormattedStreamSource::open_path(path) {
 					curr_cmp.write().unwrap().push_src_default(src.into());
 				} else {
 					eprintln!("Failed to create the source.");
@@ -227,7 +218,7 @@ pub fn start_dbg_cli(run_conf: &ArgConfig, p_state: &mut PState) {
 				};
 
 				if let Ok(sec) = _sec.parse::<f32>() {
-					curr_cmp.write().unwrap().set_time_millis((sec * 1000.0) as u64)
+					curr_cmp.write().unwrap().set_time_millis((sec * 1000.0) as u64);
 				} else {
 					eprintln!("Invalid value for second");
 					continue;

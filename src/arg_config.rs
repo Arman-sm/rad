@@ -36,15 +36,13 @@ pub struct ArgConfig {
 
 	#[clap(short = 'l', long = "log-level", default_value_t = DEFAULT_LOG_LEVEL)]
 	pub log_level: log::Level,
-	
-	// #[clap(short = 'D', long = "no-defaults", default_value_t = false)]
-	// pub no_defaults: bool
 }
 
 impl ArgConfig {
 	pub fn audio_dir(&self) -> PathBuf { self.data_dir.join("audios") }
 }
 
+/// Processes the command line arguments
 pub fn get_arg_config() -> ArgConfig {
 	let conf = ArgConfig::parse();
 

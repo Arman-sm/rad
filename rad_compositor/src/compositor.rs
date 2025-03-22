@@ -2,7 +2,7 @@ use std::{sync::{Arc, Condvar, Mutex}, thread::{self, sleep}, time::Duration};
 
 use coarsetime::Instant;
 
-use crate::{cmp_reg::{CompositorData, CompositorState}, composition::{convert_sample_rates, CompositionSrc, TWrappedCompositionState}, source::{BaseSource, Source, TSample}};
+use crate::{cmp_reg::{CompositorData, CompositorState}, composition::{convert_sample_rates, CompositionSrc, TWrappedCompositionState}, source::{BaseSource, Source, TFrameIdx, TSample}};
 
 const COMPUTE_AHEAD_SEC: f32 = 0.3;
 
@@ -70,7 +70,7 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		}
 	}
 
-	pub fn set_to_live(node: &mut Arc<CompositionBufferNode<BUF_SIZE>>, sample_rate: u32, channels: u16) {
+	pub fn set_to_live(node: &mut Arc<CompositionBufferNode<BUF_SIZE>>, sample_rate: TFrameIdx, channels: u8) {
 		let computed_buffers_ahead_of_time = (COMPUTE_AHEAD_SEC * sample_rate as f32) as usize / (BUF_SIZE / channels as usize);
 
 		let mut i = 1;
@@ -98,11 +98,14 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	}
 }
 
-pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: u32, rate: usize, offset: isize) -> Option<Vec<f32>> {
-	let conv = (rate * src.sample_rate() as usize) as f64 / into_sample_rate as f64 + offset as f64;
+/// Makes the sample-rate conversion a bit smoother.
+/// 
+/// Finds the nearest two frames in the source sample-rate and calculates the weighted average of them based on their closeness to the target.
+pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: TFrameIdx, rate: TFrameIdx, offset: isize) -> Option<Vec<TSample>> {
+	let conv = (rate * src.sample_rate()) as f64 / into_sample_rate as f64 + offset as f64;
 	assert!(0.0 <= conv);
 
-	let a = conv.floor() as usize;
+	let a = conv.floor() as TFrameIdx;
 	let diff = conv - conv.floor();
 
 	let res_a = src.get_by_frame_i(a)?;
@@ -120,26 +123,32 @@ pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: u32, rate: u
 	Some(res)
 }
 
-pub fn compute_frame(sources: &mut [CompositionSrc], channels: u16, sample_rate: u32, frame_i: usize) -> Vec<TSample> {
+fn fetch_frame(cmp_src: &mut CompositionSrc, target_sample_rate: TFrameIdx, frame_idx: TFrameIdx) -> Option<Vec<TSample>> {
+	let conv_frame_i =
+			convert_sample_rates(target_sample_rate, frame_idx, cmp_src.src.sample_rate()) as isize
+			- cmp_src.composition_data.frame_offset;
+
+	if cmp_src.src.sample_rate() == target_sample_rate {
+		cmp_src.src.get_by_frame_i(conv_frame_i as TFrameIdx)
+	} else {
+		approximate_frame_linear(&mut cmp_src.src, target_sample_rate, frame_idx, cmp_src.composition_data.frame_offset)
+	}
+}
+
+pub fn compute_eventual_frame(sources: &mut [CompositionSrc], channels: u8, sample_rate: TFrameIdx, frame_idx: TFrameIdx) -> Vec<TSample> {
 	let mut res = vec![0f32; channels as usize];
 
 	// Getting the output of each source
 	for cmp_src in sources.iter_mut() {
-		let src_res: Option<Vec<f32>>;	
-		
 		let conv_frame_i =
-			convert_sample_rates(sample_rate, frame_i, cmp_src.src.sample_rate()) as isize
+			convert_sample_rates(sample_rate, frame_idx, cmp_src.src.sample_rate()) as isize
 			- cmp_src.composition_data.frame_offset;
 
 		if conv_frame_i < 0 { continue; }
 
-		if cmp_src.src.sample_rate() == sample_rate {
-			src_res = cmp_src.src.get_by_frame_i(conv_frame_i as usize);
-		} else {
-			src_res = approximate_frame_linear(&mut cmp_src.src, sample_rate, frame_i, cmp_src.composition_data.frame_offset);
-		}
-		
-		if let Some(src_res) = src_res {
+		let val = fetch_frame(cmp_src, sample_rate, frame_idx);
+
+		if let Some(src_res) = val {
 			for channel_i in 0..res.len() {
 				res[channel_i] += src_res[channel_i % src_res.len()] * cmp_src.composition_data.amplification;
 			}
@@ -149,24 +158,22 @@ pub fn compute_frame(sources: &mut [CompositionSrc], channels: u16, sample_rate:
 	res
 }
 
-pub fn compute_frames<const BUF_SIZE: usize>(sources: &mut [CompositionSrc], channels: usize, sample_rate: u32, amplification: f32, offset: usize) -> [f32; BUF_SIZE] {
+pub fn compute_frames<const BUF_SIZE: usize>(sources: &mut [CompositionSrc], channels: u8, sample_rate: TFrameIdx, amplification: f32, offset: TFrameIdx) -> [f32; BUF_SIZE] {
 	let mut res = [0.0; BUF_SIZE];
-	let n = BUF_SIZE / channels;
+	let n = BUF_SIZE / channels as usize;
 
 	for i in 0..n {
-		let frame = compute_frame(sources, channels as u16, sample_rate, offset + i);
+		let frame = compute_eventual_frame(sources, channels, sample_rate, offset + i as TFrameIdx);
 		for (ch_i, v) in frame.into_iter().enumerate() {
-			res[i * channels + ch_i] = v * amplification;
+			res[i * channels as usize + ch_i] = v * amplification;
 		}
 	}
 
 	res
 }
 
-// pub fn amplify_frame
-
 /// Initiates a new compositor to work on a separate thread and returns a pointer to the first buffer node which is an entry to the audio stream.
-pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state: TWrappedCompositionState) -> (CompositorData<BUF_SIZE>, Arc<CompositionBufferNode<BUF_SIZE>>) {
+pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: TFrameIdx, cmp_state: TWrappedCompositionState) -> (CompositorData<BUF_SIZE>, Arc<CompositionBufferNode<BUF_SIZE>>) {
 	assert!(BUF_SIZE & 1 != 1);
 	let first_node: Arc<CompositionBufferNode<BUF_SIZE>>;
 	let channels;
@@ -174,11 +181,11 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 	let amp;
 	{
 		let mut cmp = cmp_state.write().unwrap();
-		channels = cmp.channels;
-		cmp_id = cmp.id.clone();
-		amp = cmp.amplification;
+		channels = cmp.get_channels();
+		cmp_id = cmp.get_id().clone();
+		amp = cmp.get_amplification();
 		first_node = 
-			CompositionBufferNode::new(compute_frames::<BUF_SIZE>(&mut cmp.sources, channels, sample_rate, amp, 0))
+			CompositionBufferNode::new(compute_frames::<BUF_SIZE>(&mut cmp.sources, channels.into(), sample_rate, amp, 0))
 	}
 	
 	// Saving the current thread id does not mean anything. Its just a valid ThreadId to put instead of mem::uninitialized until changing it after creating the compositor thread.
@@ -192,13 +199,13 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 	let _first_node = first_node.clone();
 	
 	let thread_handle = thread::Builder::new()
-		.name(format!("cmp-{}", cmp_id))
+		.name(format!("cmp-{}/{}", cmp_id, sample_rate))
 		.spawn(move || {
 			let mut start = Instant::now();
 
 			let mut node = _first_node;
-			let frames_in_buf = BUF_SIZE / channels;
-			let mut frame_i = 0;
+			let frames_in_buf: TFrameIdx = (BUF_SIZE / channels as usize) as TFrameIdx;
+			let mut frame_idx: TFrameIdx = 0;
 			let mut change_idx = 0;
 			let mut secs_sent = 0.0;
 			
@@ -206,7 +213,7 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 				// This condition ensures the compositor being killed in case of it not being used by anything
 				// The compositor and the compositor registry each have a pointer to node so if the strong count of node is less than or equal to 2 it is not being used and so it gets killed.
 				if Arc::strong_count(&node) < 3 {
-					log::debug!("Killing compositor with state id of '{}' and sample rate of '{}'", _cmp_id, _sample_rate);
+					log::debug!("Killing compositor with state id of '{}' and sample-rate of '{}'", _cmp_id, _sample_rate);
 					*state.lock().unwrap() = CompositorState::Killed;
 					return;
 				}
@@ -225,20 +232,20 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: u32, cmp_state
 				}
 
 				if change_idx < cmp.config_change_idx {
-					start = cmp.start_t;
-					secs_sent = cmp.start_t.elapsed().as_f64() as f32;
-					frame_i = (secs_sent * sample_rate as f32) as usize;
+					start = Instant::now();
+					secs_sent = 0.0;
+					frame_idx = (cmp.get_time_sec() as f32 * sample_rate as f32) as TFrameIdx;
 					change_idx = cmp.config_change_idx;
 				}
 
 				node = node.push_next(
-					compute_frames::<BUF_SIZE>(&mut cmp.sources, _channels, sample_rate, _amp, frame_i)
+					compute_frames::<BUF_SIZE>(&mut cmp.sources, _channels, sample_rate, _amp, frame_idx)
 				);
 
 				drop(cmp);
 
 				secs_sent += 1.0 / (sample_rate as f32 / frames_in_buf as f32);
-				frame_i += frames_in_buf;
+				frame_idx += frames_in_buf;
 
 				if let CompositorState::Active(_, ref mut state_buff_p) = *state.lock().unwrap() {
 					*state_buff_p = node.clone();

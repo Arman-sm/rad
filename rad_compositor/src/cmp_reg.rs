@@ -1,6 +1,6 @@
 use std::{sync::{Arc, Mutex}, thread::ThreadId};
 
-use crate::{composition::TWrappedCompositionState, compositor::{init_compositor_thread, CompositionBufferNode}};
+use crate::{composition::TWrappedCompositionState, compositor::{init_compositor_thread, CompositionBufferNode}, source::TFrameIdx};
 
 pub enum CompositorState<const BUF_SIZE: usize> {
     Active(ThreadId, Arc<CompositionBufferNode<BUF_SIZE>>),
@@ -8,13 +8,13 @@ pub enum CompositorState<const BUF_SIZE: usize> {
 }
 
 pub struct CompositorData<const BUF_SIZE: usize> {
-    sample_rate: u32,
+    sample_rate: TFrameIdx,
     cmp_id: String,
     state: Arc<Mutex<CompositorState<BUF_SIZE>>>
 }
 
 impl<const BUF_SIZE: usize> CompositorData<BUF_SIZE> {
-    pub fn new(cmp_id: String, sample_rate: u32, state: Arc<Mutex<CompositorState<BUF_SIZE>>>) -> Self {
+    pub fn new(cmp_id: String, sample_rate: TFrameIdx, state: Arc<Mutex<CompositorState<BUF_SIZE>>>) -> Self {
         CompositorData {
             cmp_id,
             sample_rate,
@@ -36,7 +36,7 @@ impl<const BUF_SIZE: usize> CompositionRegistry<BUF_SIZE> {
         }
     }
 
-    pub fn get_active_buf(&mut self, cmp_id: &str, sample_rate: u32) -> Option<Arc<CompositionBufferNode<BUF_SIZE>>> {
+    pub fn get_active_buf(&mut self, cmp_id: &str, sample_rate: TFrameIdx) -> Option<Arc<CompositionBufferNode<BUF_SIZE>>> {
         for cmp in self.compositors.iter_mut() {
             let cmp_lock = cmp.state.lock().unwrap();
 
@@ -48,7 +48,7 @@ impl<const BUF_SIZE: usize> CompositionRegistry<BUF_SIZE> {
 
         }
 
-        let cmp_state = self.compositions.iter().find(|d| d.read().unwrap().id == cmp_id)?.clone();
+        let cmp_state = self.compositions.iter().find(|d| d.read().unwrap().get_id() == cmp_id)?.clone();
 
         let (compositor, node) = init_compositor_thread::<BUF_SIZE>(sample_rate, cmp_state);
 
@@ -58,7 +58,7 @@ impl<const BUF_SIZE: usize> CompositionRegistry<BUF_SIZE> {
     }
     
     pub fn find_composition(&self, cmp_id: &str) -> Option<&TWrappedCompositionState> {
-        self.compositions.iter().find(|c| c.read().unwrap().id == cmp_id )
+        self.compositions.iter().find(|c| c.read().unwrap().get_id() == cmp_id )
     }
 
     // pub fn find_compositor(&self, cmp_id: &str, sample_rate: u32) -> Option<&CompositorData<BUF_SIZE>> {

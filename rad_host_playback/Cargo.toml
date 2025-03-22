@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 rad_compositor = { path = "../rad_compositor" }
 
-rodio = "0.18.0"
-# symphonia = "0.5.4"
+rodio = "0.20.*"

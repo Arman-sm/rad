@@ -1,11 +1,11 @@
-workspace = { members = ["rad_host_playback", "rad_compositor", "rad_net_stream", "rad_dbg_udp_reciever"] }
+workspace = { members = ["rad_host_playback", "rad_compositor", "rad_net_stream", "rad_remote", "rad_storage"] }
 [package]
 name = "rad"
 repository = "https://github.com/Arman-sm/rad"
 readme = "./README.md"
 license-file = "./LICENSE"
 authors = ["Arman Salimi Moghadam"]
-version = "0.3.0"
+version = "1.0.0"
 edition = "2021"
 
 [profile.release]
@@ -15,9 +15,13 @@ lto = "fat"
 rad_host_playback = { path = "./rad_host_playback" }
 rad_net_stream = { path = "./rad_net_stream" }
 rad_compositor = { path = "./rad_compositor" }
+rad_remote = { path = "./rad_remote" }
+rad_storage = { path = "./rad_storage" }
 
-clap = { version = "4.5.16", features = ["derive", "env"] }
-log = "0.4.20"
+clap = { version = "4.5.*", features = ["derive", "env"] }
+log = "0.4.*"
 simple_logger = "5.0.0"
-toml = "0.8.19"
-serde = { version = "1.0.209", features = ["derive"] }
+toml = "0.8.*"
+serde = { version = "1.0.*", features = ["derive"] }
+futures = "0.3.*"
+tokio = { version = "1.42.*", features = ["full"] }

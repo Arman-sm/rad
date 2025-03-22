@@ -1,4 +1,6 @@
-pub mod playback;
-mod writer;
+// This crate is dedicated to the adapter for playing the audio on the host system but is currently disabled.
 
-pub use playback::init_host_playback_default;
+// pub mod playback;
+// mod writer;
+
+// pub use playback::init_host_playback_default;

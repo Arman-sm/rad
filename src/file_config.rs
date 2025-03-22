@@ -1,13 +1,16 @@
-use std::{collections::HashSet, fs::File, io::Read, net::ToSocketAddrs, sync::{Arc, RwLock}};
+use std::{collections::HashSet, fs::File, io::Read, net::{SocketAddr, ToSocketAddrs}, sync::{Arc, Mutex, RwLock}};
 
-use rad_compositor::{adapter::AdapterHandle, cmp_reg::CompositionRegistry, composition::CompositionState};
-// use rad_host_playback::{init_host_playback_default, playback::HostPlayback};
+use rad_compositor::{adapter::AdapterHandle, cmp_reg::CompositionRegistry, composition::CompositionState, source::TFrameIdx};
 use rad_net_stream::{init_simple_http_adapter, init_udp_adapter};
 use serde::Deserialize;
 use toml::Table;
 
+const DEFAULT_REMOTE_ADDR: &str = "127.0.0.1:4600";
+
 #[derive(Deserialize)]
 struct FileConfig {
+	// TODO: Change this field's name.
+	api_addr: Option<String>,
 	composition: Vec<Composition>,
 	endpoints: Endpoints
 }
@@ -30,12 +33,13 @@ struct OutputEndpoint {
 	adapter: String,
 	ap: Table,
 	cast: String,
-	sample_rate: u32,
-	channels: u16
+	sample_rate: TFrameIdx,
+	channels: u8
 }
 
 pub struct PState  {
-	pub cmp_reg: CompositionRegistry<1024>,
+	pub remote_addr: SocketAddr,
+	pub cmp_reg: Arc<Mutex<CompositionRegistry<1024>>>,
 	pub adapters: Vec<AdapterHandle>
 }
 
@@ -44,14 +48,10 @@ fn create_corresponding_composition_state(conf: &Composition) -> CompositionStat
 		panic!("Composition ID can't be left empty.")
 	}
 
-	let mut res = CompositionState {
-		id: conf.id.clone(),
-		amplification: conf.amp,
-		..Default::default()
-	};
+	let mut res = CompositionState::new(conf.id.clone(), conf.amp);
 
 	if conf.pause {
-		res.pause_t = Some(res.start_t);
+		res.set_paused_since(res.start_time().clone());
 	}
 
 	res
@@ -75,9 +75,7 @@ fn create_composition_registry<const BUF_SIZE: usize>(compositions: &Vec<Composi
 	reg
 }
 
-fn create_corresponding_output_endpoint(cmp_reg: &mut CompositionRegistry<1024>, end_conf: &OutputEndpoint) -> AdapterHandle {
-	let buf = cmp_reg.get_active_buf(&end_conf.cast, end_conf.sample_rate).unwrap();
-	
+fn create_corresponding_output_endpoint(cmp_reg: Arc<Mutex<CompositionRegistry<1024>>>, end_conf: &OutputEndpoint) -> AdapterHandle {	
 	match end_conf.adapter.as_str() {
 		"net-udp" => {
 			let adapter_args = &end_conf.ap;
@@ -98,24 +96,9 @@ fn create_corresponding_output_endpoint(cmp_reg: &mut CompositionRegistry<1024>,
 				end_conf.id.clone(),
 				bind_addr,
 				dest_addr,
-				buf
+				cmp_reg.lock().unwrap().get_active_buf(&end_conf.cast, end_conf.sample_rate).unwrap()
 			)
 		},
-		// "net-ws" => {
-		// 	let adapter_args = &end_conf.ap;
-			
-		// 	let bind_addr =
-		// 		adapter_args.get("bind").expect("Filed 'ap:bind' can't be left empty.")
-		// 		.as_str().expect("Field 'ap:bind' has to be a string.")
-		// 		.to_socket_addrs().expect("Field 'ap:bind' has to be a proper address.")
-		// 		.nth(0).expect("No addresses were found in 'ap:bind'.");
-
-		// 	init_ws_adapter(
-		// 		end_conf.id.clone(),
-		// 		bind_addr,
-		// 		buf
-		// 	)
-		// },
 		"net-simple-http" => {
 			let adapter_args = &end_conf.ap;
 			
@@ -130,7 +113,8 @@ fn create_corresponding_output_endpoint(cmp_reg: &mut CompositionRegistry<1024>,
 				end_conf.sample_rate,
 				end_conf.channels,
 				bind_addr,
-				buf
+				end_conf.cast.clone(),
+				cmp_reg.clone()
 			)
 		},
 		"host" => {
@@ -138,14 +122,14 @@ fn create_corresponding_output_endpoint(cmp_reg: &mut CompositionRegistry<1024>,
 			unimplemented!();
 			// init_host_playback_default(end_conf.id, buf)
 		},
-		_ => {
-			panic!("")
+		other_type => {
+			panic!("Invalid adapter type '{}' was chosen in the configuration file.", other_type)
 		}
 	}
 }
 
 // For now only output endpoints will be supported but support endpoints for receiving audio from devices like microphones on external devices may be implemented in the feature but isn't a planned feature yet.
-fn create_endpoints(cmp_reg: &mut CompositionRegistry<1024>, endpoints_config: &Endpoints) -> Vec<AdapterHandle> {
+fn create_endpoints(cmp_reg: Arc<Mutex<CompositionRegistry<1024>>>, endpoints_config: &Endpoints) -> Vec<AdapterHandle> {
 	let mut adapters = Vec::with_capacity(endpoints_config.out.len());
 	let mut ids = HashSet::new();
 
@@ -160,15 +144,16 @@ fn create_endpoints(cmp_reg: &mut CompositionRegistry<1024>, endpoints_config: &
 		}
 
 		adapters.push(
-			create_corresponding_output_endpoint(cmp_reg, &end_conf)
+			create_corresponding_output_endpoint(cmp_reg.clone(), &end_conf)
 		);		
 	}
 
 	adapters
 }
 
-/// This function with panic in case of encountering any errors while trying to read and set the program up according to it.
-/// As in any case the program is not intended to be ran in case of a faulty configuration file.
+/// Configures the program state according to the configuration file.
+/// Caution: This function with panic in case of encountering any errors while trying to read and set the program up according to it,
+/// as in any case the program is not intended to be ran in case of a faulty configuration file.
 pub fn init_with_file_config(path: &str) -> PState {
 	log::debug!("Reading the configuration file at '{path}'.");
 	
@@ -187,12 +172,17 @@ pub fn init_with_file_config(path: &str) -> PState {
 			Err(_) => panic!("Failed to parse '{path}'.")
 		};
 	
-	let mut cmp_reg = create_composition_registry(&config.composition);
+	let cmp_reg = Arc::new(Mutex::new(create_composition_registry(&config.composition)));
 
-	let out_adapters = create_endpoints(&mut cmp_reg, &config.endpoints);
+	let out_adapters = create_endpoints(cmp_reg.clone(), &config.endpoints);
 
 	PState {
+		remote_addr: config.api_addr
+			.unwrap_or(DEFAULT_REMOTE_ADDR.into())
+			.parse()
+			.expect("Failed to parse field 'api_addr' in the configuration file."),
 		cmp_reg,
 		adapters: out_adapters,
+		
 	}
 }

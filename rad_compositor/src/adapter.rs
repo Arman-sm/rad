@@ -1,4 +1,4 @@
-// AdapterHandles are going to be a way to manage different adapters ( outputs: e.g. host playback, udp adapter ) in a standardized way for the sake of simplicity and scalability.
+// AdapterHandles are a way to manage different adapters ( outputs: e.g. host playback, udp adapter ) in a standardized way for the sake of simplicity and scalability.
 
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 

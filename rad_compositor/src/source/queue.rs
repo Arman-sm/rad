@@ -2,15 +2,15 @@ use std::collections::LinkedList;
 
 use crate::compositor::approximate_frame_linear;
 
-use super::{BaseSource, Source, TSample};
+use super::{BaseSource, Source, TFrameIdx, TSample};
 
 pub struct QueueSrc {
     sources: LinkedList<Source>,
-    sample_rate: u32
+    sample_rate: TFrameIdx
 }
 
 impl QueueSrc {
-    pub fn new(sample_rate: u32) -> Self {
+    pub fn new(sample_rate: TFrameIdx) -> Self {
         QueueSrc {
             sources: LinkedList::new(),
             sample_rate
@@ -35,9 +35,9 @@ impl QueueSrc {
 }
 
 impl BaseSource for QueueSrc {
-    fn sample_rate(&self) -> u32 { self.sample_rate }
+    fn sample_rate(&self) -> TFrameIdx { self.sample_rate }
 
-    fn current_duration_frames(&self) -> usize {
+    fn current_duration_frames(&self) -> TFrameIdx {
         let mut dur = 0;
         
         for src in self.sources.iter() {
@@ -47,7 +47,7 @@ impl BaseSource for QueueSrc {
         dur
     }
 
-    fn duration(&self) -> Option<usize> {
+    fn duration(&self) -> Option<TFrameIdx> {
         let mut dur = 0;
 
         for src in self.sources.iter() {
@@ -60,13 +60,13 @@ impl BaseSource for QueueSrc {
         Some(dur)
     }
 
-    fn get_by_frame_i(&mut self, frame_i: usize) -> Option<Vec<TSample>> {
-        let mut offset: usize = 0;
+    fn get_by_frame_i(&mut self, frame_idx: TFrameIdx) -> Option<Vec<TSample>> {
+        let mut offset: TFrameIdx = 0;
         for src in self.sources.iter_mut() {
             let frame = if src.sample_rate() == self.sample_rate {
-                src.get_by_frame_i(frame_i - offset)
+                src.get_by_frame_i(frame_idx - offset as TFrameIdx)
             } else {
-                approximate_frame_linear(src, self.sample_rate, frame_i - offset, 0)
+                approximate_frame_linear(src, self.sample_rate, frame_idx - offset, 0)
             };
             
             if frame.is_some() { return frame; }
