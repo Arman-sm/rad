@@ -76,7 +76,7 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 		Self::set_to_head(node);
 		let mut head = node.clone();
 
-		for i in 0..computed_buffers_ahead_of_time {
+		for _ in 0..computed_buffers_ahead_of_time {
 			head = head.next();
 		}
 	}

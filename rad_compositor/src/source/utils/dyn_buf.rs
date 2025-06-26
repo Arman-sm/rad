@@ -1,4 +1,4 @@
-use std::{cmp::min, fs::File, io::{self, Write}, sync::{Arc, Condvar, Mutex}};
+use std::{cmp::min, io, sync::{Arc, Condvar, Mutex}};
 
 use symphonia::core::io::MediaSource;
 
@@ -18,12 +18,9 @@ pub struct DataLock {
 impl DataLock {
     pub fn add_buf(&self, buf: Box<[u8]>) {
         let mut lock = self.lock.lock().unwrap();
-        let mut f = File::options().create(true).append(true).open("./ll").unwrap();
         
         assert!(!lock.eof);
         
-        f.write_all(&*buf).unwrap();
-
         lock.size += buf.len() as u64;
         lock.bufs.push(buf);
         self.cnd.notify_all();

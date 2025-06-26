@@ -1,6 +1,6 @@
-use std::{collections::BTreeSet, path::PathBuf, sync::{Arc, LazyLock, Mutex, RwLock}};
+use std::{collections::BTreeSet, path::PathBuf, process::exit, sync::{atomic::AtomicU8, Arc, RwLock}};
 
-static STORE_ID_COUNTER: LazyLock<Arc<Mutex<u8>>> = LazyLock::new(|| Arc::new(Mutex::new(0)));
+static STORE_ID_COUNTER: AtomicU8 = AtomicU8::new(0);
 
 pub struct HeapID(pub PathBuf);
 
@@ -13,10 +13,7 @@ pub struct StoreID(u8);
 
 impl StoreID {
     fn new() -> StoreID {
-        let mut lk = STORE_ID_COUNTER.lock().unwrap();
-
-        *lk += 1;
-        StoreID(*lk)
+        StoreID(STORE_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst))
     }
 }
 
@@ -87,7 +84,6 @@ impl Ord for Segment {
 const DEFAULT_CACHE_LIMIT_BYTES: u64 = 32 * 1024 * 1024; // 32MB
 
 pub struct SegmentStore {
-    mem_segments: Vec<(PileID, u64)>,
     cache_size: u64,
     cache_limit_bytes: u64,
     piles: Vec<BTreeSet<Segment>>,
@@ -99,7 +95,6 @@ pub struct SegmentStore {
 impl SegmentStore {
     pub fn new() -> Arc<RwLock<Self>> {
         let store = SegmentStore {
-            mem_segments: Vec::new(),
             cache_limit_bytes: DEFAULT_CACHE_LIMIT_BYTES,
             cache_size: 0,
             piles: Vec::new(),
@@ -116,7 +111,7 @@ impl SegmentStore {
         let key = Segment {
             frame_idx,
             data: SegmentData::Cache(Box::new([])),
-            recency_idx,
+            recency_idx: 0,
             channels: 0,
         };
 
@@ -130,11 +125,12 @@ impl SegmentStore {
             }
             
             self.cache_size -= (seg_data.data.len() * size_of::<f32>()) as u64;
-            self.recency_set.remove(&(recency_idx, pile_id, frame_idx));
             
         } else {
             log::error!("A drop request was initiated for a nonexistent cache segment.");
         }
+
+        self.recency_set.remove(&(recency_idx, pile_id, frame_idx));
     }
 
     fn shake_cache(&mut self) {
@@ -178,9 +174,7 @@ impl SegmentStore {
         
         self.piles[pile_id.0 as usize].insert(seg);
 
-        if permanent {
-            self.mem_segments.push((pile_id, frame_idx));
-        } else {
+        if !permanent {
             self.recency_set.insert((recency_idx, pile_id, frame_idx));
             self.cache_size += data_size_bytes as u64;
         }
@@ -209,8 +203,9 @@ impl SegmentStore {
                 
                 if matches!(seg.data, SegmentData::Cache(_)) {
                     // Update the recency set
-                    self.recency_set.remove(&(seg.recency_idx, pile_id, seg.frame_idx));
-                    self.recency_set.insert((self.new_recency_idx(), pile_id, seg.frame_idx));
+                  //  if !self.recency_set.remove(&(seg.recency_idx, pile_id, seg.frame_idx)) {
+                    //}
+                    //self.recency_set.insert((self.new_recency_idx(), pile_id, seg.frame_idx));
                 }
 
                 Some(seg)

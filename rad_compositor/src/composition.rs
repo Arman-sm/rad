@@ -1,4 +1,4 @@
-use std::{sync::{Arc, Mutex, RwLock}, vec};
+use std::{sync::{atomic::AtomicU16, Arc, RwLock}, vec};
 
 use coarsetime::Instant;
 
@@ -6,7 +6,7 @@ use crate::source::{BaseSource, Source, TFrameIdx};
 
 pub type TWrappedCompositionState = Arc<RwLock<CompositionState>>;
 
-static COMPOSITION_ID_TO_ALLOCATE: Mutex<u16> = Mutex::new(0);
+static COMPOSITION_ID_TO_ALLOCATE: AtomicU16 = AtomicU16::new(0);
 pub struct SrcCompositionData { pub frame_offset: i64, pub amplification: f32 }
 pub struct CompositionSrc { pub src: Source, pub composition_data: SrcCompositionData }
 
@@ -133,10 +133,8 @@ impl CompositionState {
 
 impl Default for CompositionState {
 	fn default() -> Self {
-		let mut id_handle = COMPOSITION_ID_TO_ALLOCATE.lock().unwrap();
+		let id_handle = COMPOSITION_ID_TO_ALLOCATE.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 		let id = format!("cmp-{}", id_handle);
-
-		*id_handle += 1;
 
 		CompositionState {
 			id,
