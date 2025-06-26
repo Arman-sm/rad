@@ -8,7 +8,6 @@ const ASCII_START_BANNER: &str = "
   \x1b[31;214m█▀█ ▄▀█ █▀▄   \x1b[93m█▀▄ █▄▄ █▀▀   \x1b[38;5;250m█▀▀ █   █
   \x1b[31;214m█▀▄ █▀█ █▄▀   \x1b[93m█▄▀ █▄█ █▄█   \x1b[38;5;250m█▄▄ █▄▄ █\x1b[0m";
 
-// TODO: Change this to a list of the commands and their description and format it later in the program
 const HELP_PAGE: &str =
 "> op [{filepath} | +{relative to {data-dir}/...}] -> Opens a new audio file
 > sc {cmp-id} | set-cmp {cmp-id}                  -> Selects the composition for use with other commands

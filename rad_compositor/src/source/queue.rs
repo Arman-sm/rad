@@ -76,4 +76,9 @@ impl BaseSource for QueueSrc {
 
         None
     }
+
+    // TODO
+    fn channels(&self) -> u8 {
+        2
+    }
 }

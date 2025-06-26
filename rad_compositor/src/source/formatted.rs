@@ -30,6 +30,7 @@ pub struct FormattedStreamSource {
     track_id: u32,
     last_frame_idx: TFrameIdx,
     duration: TFrameIdx,
+    is_seekable: bool,
 }
 
 impl FormattedStreamSource {
@@ -42,6 +43,8 @@ impl FormattedStreamSource {
     
     /// Warning: The stream must yield something on the first opening
     pub fn open_stream(stream: Box<dyn MediaSource>, origin: Option<StreamOrigin>) -> Option<Self> {
+        let is_stream_seekable = stream.is_seekable();
+        
         // Create the media source stream.
         let mss = MediaSourceStream::new(stream, Default::default());
 
@@ -99,7 +102,8 @@ impl FormattedStreamSource {
             channels: spec.channels.count() as u8,
             track_id,
             duration: track.codec_params.n_frames.unwrap() as TFrameIdx,
-            last_frame_idx: 0
+            last_frame_idx: 0,
+            is_seekable: is_stream_seekable,
         })
     }
 
@@ -137,11 +141,12 @@ impl BaseSource for FormattedStreamSource {
         self.last_frame_idx = buf.start() + buf.frame_count() - 1;
 
         GLOBAL_SEGMENT_STORE.write().unwrap()
-            .insert(self.storage_pile_id, buf.start(), buf.channels, buf.samples.into_boxed_slice());
-
-        // let last_buf = mem::replace(&mut self.buf, buf);
-        // self.cache = last_buf;
+            .insert(self.storage_pile_id, buf.start(), buf.channels, buf.samples.into_boxed_slice(), !self.is_seekable);
 
         self.get_by_frame_i(frame_idx)
+    }
+
+    fn channels(&self) -> u8 {
+        self.channels
     }
 }

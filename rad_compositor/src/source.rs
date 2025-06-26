@@ -8,7 +8,6 @@ pub mod formatted;
 pub type TSample = f32;
 pub type TFrameIdx = u64;
 
-// TODO: Comments!
 /// This trait contains the methods required for implementing a new source.
 pub trait BaseSource {
     /// It returns the sample-rate which the source is outputting.
@@ -29,6 +28,8 @@ pub trait BaseSource {
     fn current_duration_frames(&self) -> TFrameIdx;
     
     fn get_by_frame_i(&mut self, frame_idx: TFrameIdx) -> Option<Vec<TSample>>;
+
+    fn channels(&self) -> u8;
 }
 
 /// A type for staying generic over different types of sources.
@@ -63,6 +64,13 @@ impl BaseSource for Source {
         match self {
             Self::File(file) => file.sample_rate(),
             Self::Queue(queue) => queue.sample_rate(),
+        }
+    }
+
+    fn channels(&self) -> u8 {
+        match self {
+            Self::File(file) => file.channels(),
+            Self::Queue(queue) => queue.channels(),
         }
     }
 }

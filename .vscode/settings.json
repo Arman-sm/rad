@@ -6,6 +6,7 @@
         "dasp",
         "deof",
         "kanal",
-        "tungstenite"
+        "tungstenite",
+        "unpark"
     ]
 }

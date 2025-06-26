@@ -8,8 +8,6 @@
 
 use std::sync::{Arc, LazyLock, RwLock};
 
-use segment_store::SegmentStore;
-
 pub mod segment_store;
 
 pub mod macros {
@@ -17,15 +15,15 @@ pub mod macros {
     macro_rules! respond_storage {
         ($pile_id:expr, $frame_idx:expr) => {
             {
-                let lk = GLOBAL_SEGMENT_STORE.read().unwrap();
+                let mut lk = GLOBAL_SEGMENT_STORE.write().unwrap();
                 let _seg = lk.find($pile_id, $ frame_idx);
                 if let Some(seg) = _seg {
-                    return Some(seg.data[(($frame_idx - seg.frame_idx) * seg.channels as u64) as usize..(($frame_idx - seg.frame_idx + 1) * seg.channels as u64) as usize].to_vec());
+                    return Some(seg.data.fetch()[(($frame_idx - seg.frame_idx) * seg.channels as u64) as usize..(($frame_idx - seg.frame_idx + 1) * seg.channels as u64) as usize].to_vec());
                 }
             }
         };
     }
 }
 
-pub static GLOBAL_SEGMENT_STORE: LazyLock<Arc<RwLock<SegmentStore>>> =
-    LazyLock::new(|| Arc::new(RwLock::new(SegmentStore::new())));
+pub static GLOBAL_SEGMENT_STORE: LazyLock<Arc<RwLock<segment_store::SegmentStore>>> =
+    LazyLock::new(segment_store::SegmentStore::new);

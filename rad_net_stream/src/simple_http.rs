@@ -24,7 +24,7 @@ type TCmpReg = Arc<Mutex<CompositionRegistry<1024>>>;
 const HTTP_INITIAL_MSG: &str = "HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nConnection: keep-alive\r\nKeep-Alive: timeout=5\r\nTransfer-Encoding: chunked\r\n\r\n";
 
 // TODO: Optimize
-pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: TFrameIdx, channels: u8, mut st: TcpStream) {
+pub fn stream_as_wav(mut cmp_node: TCmpNode, sample_rate: TFrameIdx, channels: u8, mut st: TcpStream) {
     // Streams the data using http chunked streaming method
     // Reference: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Transfer-Encoding
     // Reference: Analyzing the same thing done in https://github.com/Arman-sm/Atmosphere via wireshark 
@@ -76,14 +76,13 @@ pub fn stream_as_wav(cmp_node: &mut TCmpNode, sample_rate: TFrameIdx, channels: 
 
         st.flush().unwrap();
 
-        *cmp_node = cmp_node.next();
+        cmp_node = cmp_node.next();
     }
 }
 
-
 const HTTP_200_RESPONSE: &str = "HTTP/1.1 200 OK\r\n";
 const HTTP_400_RESPONSE: &str = "HTTP/1.1 400 Bad Request\r\n";
-fn handle_conn(mut st: TcpStream, sample_rate: TFrameIdx, channels: u8, mut cmp_node: TCmpNode) {
+fn handle_conn(mut st: TcpStream, sample_rate: TFrameIdx, channels: u8, cmp_id: &str, cmp_reg: TCmpReg) {
     macro_rules! static_file_serve {
         ($path:expr, $mime_type:expr) => {{
             log::debug!("[ap.simple_http] Sending '{}'.", $path);
@@ -125,12 +124,13 @@ fn handle_conn(mut st: TcpStream, sample_rate: TFrameIdx, channels: u8, mut cmp_
         "/audio.wav" => {
             log::debug!("[ap.simple_http] Sending the audio as wav.");
 
-            CompositionBufferNode::set_to_live(&mut cmp_node, sample_rate, channels);
+            let mut node = 
+                cmp_reg.lock().unwrap().get_active_buf(cmp_id, sample_rate)
+                    .expect(&format!("[ap.simple_http] Wasn't able to obtain active buffer for composition '{}'.", cmp_id));
+            CompositionBufferNode::set_to_live(&mut node, sample_rate, channels);
             
-            let mut cmp = cmp_node.clone();
-        
             thread::spawn(move || {
-                stream_as_wav(&mut cmp, sample_rate, channels, st);
+                stream_as_wav(node, sample_rate, channels, st);
             });
         },
         "/"            => { static_file_serve!("./simple_http_static/index.html", "text/html"); },
@@ -163,7 +163,7 @@ pub fn init_simple_http_adapter(id: String, sample_rate: TFrameIdx, channels: u8
             if is_closed.load(Ordering::Relaxed) { return; }
             match incoming {
                 Ok(st) => {
-                    handle_conn(st, sample_rate, channels, cmp_reg.lock().unwrap().get_active_buf(&cmp_id, sample_rate).unwrap());
+                    handle_conn(st, sample_rate, channels, &cmp_id, cmp_reg.clone());
                 },
                 Err(e) => {
                     log::error!("[ap.simple_http] Connection failure happened in adapter '{_id}' with error '{:?}'.", e);

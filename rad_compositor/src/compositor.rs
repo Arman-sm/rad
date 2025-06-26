@@ -73,27 +73,11 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 	pub fn set_to_live(node: &mut Arc<CompositionBufferNode<BUF_SIZE>>, sample_rate: TFrameIdx, channels: u8) {
 		let computed_buffers_ahead_of_time = (COMPUTE_AHEAD_SEC * sample_rate as f32) as usize / (BUF_SIZE / channels as usize);
 
-		let mut i = 1;
+		Self::set_to_head(node);
 		let mut head = node.clone();
 
-		loop {
-			let next = head.next.lock().unwrap().clone();
-			if let Some(next_node) = next {
-				head = next_node;
-			} else {
-				if i < computed_buffers_ahead_of_time {
-					for _ in 0..(computed_buffers_ahead_of_time - i) {
-						head = head.next();
-					}
-				}
-
-				return;
-			}
-
-			i += 1;
-			if computed_buffers_ahead_of_time < i {
-				*node = node.next()
-			}
+		for i in 0..computed_buffers_ahead_of_time {
+			head = head.next();
 		}
 	}
 }
@@ -101,8 +85,8 @@ impl<const BUF_SIZE: usize> CompositionBufferNode<BUF_SIZE> {
 /// Makes the sample-rate conversion a bit smoother.
 /// 
 /// Finds the nearest two frames in the source sample-rate and calculates the weighted average of them based on their closeness to the target.
-pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: TFrameIdx, rate: TFrameIdx, offset: isize) -> Option<Vec<TSample>> {
-	let conv = (rate * src.sample_rate()) as f64 / into_sample_rate as f64 + offset as f64;
+pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: TFrameIdx, rate: TFrameIdx, offset: i64) -> Option<Vec<TSample>> {
+	let conv = (rate * src.sample_rate()) as f64 / into_sample_rate as f64 - offset as f64;
 	assert!(0.0 <= conv);
 
 	let a = conv.floor() as TFrameIdx;
@@ -125,8 +109,10 @@ pub fn approximate_frame_linear(src: &mut Source, into_sample_rate: TFrameIdx, r
 
 fn fetch_frame(cmp_src: &mut CompositionSrc, target_sample_rate: TFrameIdx, frame_idx: TFrameIdx) -> Option<Vec<TSample>> {
 	let conv_frame_i =
-			convert_sample_rates(target_sample_rate, frame_idx, cmp_src.src.sample_rate()) as isize
+			convert_sample_rates(target_sample_rate, frame_idx, cmp_src.src.sample_rate()) as i64
 			- cmp_src.composition_data.frame_offset;
+
+	if conv_frame_i < 0 { return None; }
 
 	if cmp_src.src.sample_rate() == target_sample_rate {
 		cmp_src.src.get_by_frame_i(conv_frame_i as TFrameIdx)
@@ -141,7 +127,7 @@ pub fn compute_eventual_frame(sources: &mut [CompositionSrc], channels: u8, samp
 	// Getting the output of each source
 	for cmp_src in sources.iter_mut() {
 		let conv_frame_i =
-			convert_sample_rates(sample_rate, frame_idx, cmp_src.src.sample_rate()) as isize
+			convert_sample_rates(sample_rate, frame_idx, cmp_src.src.sample_rate()) as i64
 			- cmp_src.composition_data.frame_offset;
 
 		if conv_frame_i < 0 { continue; }
