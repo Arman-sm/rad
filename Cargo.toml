@@ -1,4 +1,4 @@
-workspace = { members = ["rad_host_playback", "rad_compositor", "rad_net_stream", "rad_remote", "rad_storage"] }
+workspace = { members = ["rad_compositor", "rad_net_stream", "rad_remote", "rad_storage"] }
 [package]
 name = "rad"
 repository = "https://github.com/Arman-sm/rad"
@@ -12,7 +12,6 @@ edition = "2021"
 lto = "fat"
 
 [dependencies]
-rad_host_playback = { path = "./rad_host_playback" }
 rad_net_stream = { path = "./rad_net_stream" }
 rad_compositor = { path = "./rad_compositor" }
 rad_remote = { path = "./rad_remote" }
