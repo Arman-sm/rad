@@ -55,10 +55,13 @@ impl io::Read for DynFmtBuf {
         let data_buf = &data.bufs[self.idx];
         let bytes_read = min(data_buf.len() - self.buf_idx, buf.len());
 
-        for i in 0..bytes_read {
-            buf[i] = data_buf[self.buf_idx];
-            self.buf_idx += 1;
-        }
+        buf[..bytes_read].copy_from_slice(&data_buf[self.buf_idx..self.buf_idx+bytes_read]);
+        self.buf_idx += bytes_read;
+
+        // for i in 0..bytes_read {
+        //     buf[i] = data_buf[self.buf_idx];
+        //     self.buf_idx += 1;
+        // }
 
         if self.buf_idx == data_buf.len() {
             self.idx += 1;
@@ -81,7 +84,7 @@ impl io::Seek for DynFmtBuf {
                     return Err(io::ErrorKind::UnexpectedEof.into());
                 }
 
-                self.seek_from_end((offset * -1) as u64)
+                self.seek_from_end((-offset) as u64)
             }
         }
     }
@@ -93,6 +96,7 @@ impl io::Seek for DynFmtBuf {
 }
 
 impl DynFmtBuf {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         DynFmtBuf {
             data_lock: Arc::new(Default::default()),
@@ -109,18 +113,17 @@ impl DynFmtBuf {
     pub fn seek_from_start(&mut self, start: u64) -> io::Result<u64> {
         let lock = self.data_lock.lock.lock().unwrap();
 
-        let mut set_idx = 0;
         let mut pos = 0;
-        for buf in &lock.bufs {
-            if (0..buf.len() as u64).contains(&(start - pos)) {
-                self.idx = set_idx;
+        for (idx, buf) in lock.bufs.iter().enumerate() {
+            if start < buf.len() as u64 + pos {
+            // if (0..buf.len() as u64).contains(&(start - pos)) {
+                self.idx = idx;
                 self.buf_idx = (start - pos) as usize;
                 self.current_pos = start;
 
                 return Ok(start);
             }
-            
-            set_idx += 1;
+
             pos += buf.len() as u64;
         }
 
@@ -130,7 +133,7 @@ impl DynFmtBuf {
     pub fn seek_from_end(&mut self, offset: u64) -> io::Result<u64> {
         let lock = self.data_lock.lock.lock().unwrap();
 
-        if lock.size == 0 || (lock.size as u64) < offset {
+        if (lock.size == 0) || (lock.size < offset) {
             return Err(io::ErrorKind::UnexpectedEof.into());
         }
 
@@ -142,7 +145,7 @@ impl DynFmtBuf {
                 self.buf_idx = (offset - (lock.size - pos)) as usize;
                 self.current_pos = lock.size - offset;
 
-                return Ok(self.current_pos as u64);
+                return Ok(self.current_pos);
             }
             
             set_idx -= 1;
@@ -158,7 +161,7 @@ impl MediaSource for DynFmtBuf {
     fn byte_len(&self) -> Option<u64> {
         let lock =  self.data_lock.lock.lock().unwrap();
         if lock.eof {
-            return Some(lock.size as u64);
+            return Some(lock.size);
         }
 
         None

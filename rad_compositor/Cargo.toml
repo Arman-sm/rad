@@ -7,6 +7,6 @@ edition = "2021"
 coarsetime = "0.1.*"
 futures = "0.3.31"
 log = "0.4.*"
-symphonia = { version = "0.5.*", features = ["mpa"] }
-tokio = "1.42.*"
+symphonia = { version = "0.6.*", features = ["mpa"] }
+tokio = "1.53.*"
 rad_storage = { path = "../rad_storage" }

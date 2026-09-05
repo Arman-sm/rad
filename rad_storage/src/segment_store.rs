@@ -1,6 +1,8 @@
-use std::{collections::BTreeSet, path::PathBuf, process::exit, sync::{atomic::AtomicU8, Arc, RwLock}};
+use std::{collections::BTreeSet, path::PathBuf, sync::{atomic::AtomicU8, Arc, RwLock}};
 
 static STORE_ID_COUNTER: AtomicU8 = AtomicU8::new(0);
+
+//TODO
 
 pub struct HeapID(pub PathBuf);
 
@@ -42,8 +44,8 @@ impl SegmentData {
 
     pub fn fetch(&self) -> &[f32] {
         match self {
-            Self::Cache(c) => &c,
-            Self::Mem(m) => &m,
+            Self::Cache(c) => c,
+            Self::Mem(m) => m,
         }
     }
 }
@@ -51,6 +53,7 @@ impl SegmentData {
 pub struct Segment {
     pub frame_idx: u64,
     pub data: SegmentData,
+    #[allow(unused)]
     recency_idx: TRecencyIdx,
     pub channels: u8,
 }
@@ -69,7 +72,7 @@ impl PartialEq for Segment {
 
 impl PartialOrd for Segment {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.frame_idx.partial_cmp(&other.frame_idx)
+        Some(self.cmp(other))
     }
 }
 
@@ -77,7 +80,7 @@ impl Eq for Segment {}
 
 impl Ord for Segment {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.partial_cmp(other).unwrap()
+        self.frame_idx.cmp(&other.frame_idx)
     }
 }
 
@@ -135,7 +138,7 @@ impl SegmentStore {
 
     fn shake_cache(&mut self) {
         while self.cache_limit_bytes < self.cache_size {
-            let (recency_idx, pile_id, frame_idx) = self.recency_set.first().unwrap().clone(); 
+            let (recency_idx, pile_id, frame_idx) = *self.recency_set.first().unwrap(); 
             self.drop_cache_segment(pile_id, frame_idx, recency_idx);
         }
     }

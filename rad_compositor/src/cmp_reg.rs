@@ -29,6 +29,7 @@ pub struct CompositionRegistry<const BUF_SIZE: usize> {
 }
 
 impl<const BUF_SIZE: usize> CompositionRegistry<BUF_SIZE> {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         CompositionRegistry {
             compositions: Vec::new(),

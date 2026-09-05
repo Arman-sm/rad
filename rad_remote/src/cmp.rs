@@ -112,7 +112,7 @@ pub async fn set_play(_cmp_id: web::Path<(String,)>, data: web::Data<State>) -> 
 
     let cmp_reg = data.cmp_reg.lock().unwrap();
     let mut cmp = find_cmp_write!(cmp_reg, cmp_id);
-    cmp.set_paused(true);
+    cmp.set_paused(false);
 
     HttpResponse::Ok().body("OK\n")
 }

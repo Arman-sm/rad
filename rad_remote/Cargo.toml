@@ -8,7 +8,7 @@ rad_compositor = { path = "../rad_compositor" }
 
 actix-web = "4.9.0"
 serde = "1.0.*"
-toml = "0.8.19"
+toml = "1.1.*"
 futures = "0.3.31"
-tokio = "1.42.*"
+tokio = "1.53.*"
 log = "0.4.*"

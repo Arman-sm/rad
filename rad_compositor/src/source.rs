@@ -7,6 +7,7 @@ pub mod formatted;
 
 pub type TSample = f32;
 pub type TFrameIdx = u64;
+pub type TFrameIdxSigned = i64;
 
 /// This trait contains the methods required for implementing a new source.
 pub trait BaseSource {

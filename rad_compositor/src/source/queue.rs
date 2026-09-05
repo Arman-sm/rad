@@ -1,6 +1,6 @@
 use std::collections::LinkedList;
 
-use crate::compositor::approximate_frame_linear;
+use crate::{composition::convert_sample_rates, compositor::approximate_frame_linear, source::TFrameIdxSigned};
 
 use super::{BaseSource, Source, TFrameIdx, TSample};
 
@@ -71,7 +71,7 @@ impl BaseSource for QueueSrc {
             
             if frame.is_some() { return frame; }
             
-            offset += src.duration().unwrap();
+            offset += convert_sample_rates(src.sample_rate(), src.duration().unwrap() as TFrameIdxSigned, self.sample_rate) as TFrameIdx
         }
 
         None

@@ -1,6 +1,6 @@
 use std::{fs::read_dir, ops::Range, path::{Path, PathBuf}};
 
-use symphonia::core::audio::{AudioBuffer, AudioBufferRef, Signal};
+use symphonia::core::audio::{Audio, AudioBuffer, GenericAudioBufferRef};
 
 use crate::source::{formatted::FormattedStreamSource, queue::QueueSrc, TFrameIdx, TSample};
 
@@ -51,37 +51,29 @@ impl SampleBuf {
 		self.start_idx..self.end()
 	}
 
-	pub fn from_audio_buf_ref(start_i: TFrameIdx, audio_buf_ref: &AudioBufferRef) -> SampleBuf {
-		let f32_buf;
-		
-		match audio_buf_ref {
-            AudioBufferRef::U8(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::U16(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::U24(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::U32(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::S8(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::S16(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::S24(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::S32(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-            AudioBufferRef::F32(buf) => { return Self::from_audio_buf(start_i, &buf); },
-            AudioBufferRef::F64(buf) => { f32_buf = buf.make_equivalent::<f32>() },
-        };
+	pub fn from_audio_buf_ref(start_i: TFrameIdx, audio_buf_ref: &GenericAudioBufferRef) -> SampleBuf {
+		let spec = audio_buf_ref.spec();
+		let frames = audio_buf_ref.frames();
 
+		let mut f32_buf = AudioBuffer::<f32>::new(spec.clone(), frames * spec.channels().count());
+		f32_buf.resize_uninit(frames);
+		
+		audio_buf_ref.copy_to(&mut f32_buf);
+		
 		Self::from_audio_buf(start_i, &f32_buf)
 	}
 
 	pub fn from_audio_buf(start_i: TFrameIdx, samp_buf: &AudioBuffer<f32>) -> Self {
-		let channels = samp_buf.spec().channels.count();
+		let channels = samp_buf.spec().channels().count();
 		let frames = samp_buf.frames();
 		let samples = frames * channels;
 
-		let mut buf = Vec::with_capacity(samples);
+		let mut buf = Vec::new();
+		buf.resize(samples, 0.0_f32);
 
-		let channel_bufs = (0..channels).into_iter().map(|ch_i| samp_buf.chan(ch_i)).collect::<Vec<_>>();
-
-		for frame_i in 0..frames {
-			for ch_i in 0..channels {
-				buf.push(channel_bufs[ch_i][frame_i]);
+		for (channel_idx, channel_plane) in samp_buf.iter_planes().enumerate() {
+			for frame_i in 0..frames {
+				buf[channels*frame_i + channel_idx] = channel_plane[frame_i];
 			}
 		}
 

@@ -37,8 +37,8 @@ pub fn stream_as_wav(mut cmp_node: TCmpNode, sample_rate: TFrameIdx, channels: u
     let mut buf = Vec::new();
 
     buf.reserve_exact(
-        HTTP_INITIAL_MSG.as_bytes().len() + 
-        buf_len_hex.as_bytes().len() + 
+        HTTP_INITIAL_MSG.len() + 
+        buf_len_hex.len() + 
         wav_header.len() +
         2 // The '\r\n' at the ent
     );
@@ -46,8 +46,8 @@ pub fn stream_as_wav(mut cmp_node: TCmpNode, sample_rate: TFrameIdx, channels: u
     buf.extend_from_slice(HTTP_INITIAL_MSG.as_bytes());
     buf.extend_from_slice(buf_len_hex.as_bytes());
     buf.append(&mut wav_header);
-    buf.push('\r' as u8);
-    buf.push('\n' as u8);
+    buf.push(b'\r');
+    buf.push(b'\n');
 
     st.write_all(&buf).unwrap();
     st.flush().unwrap();
@@ -58,12 +58,12 @@ pub fn stream_as_wav(mut cmp_node: TCmpNode, sample_rate: TFrameIdx, channels: u
 
         let mut audio_i16 = [0i16; BUF_SIZE / 2];
         for (i, v) in buf_f32.iter().enumerate() {
-            audio_i16[i] = (v.min(1.0).max(-1.0) * i16::MAX as f32) as i16;
+            audio_i16[i] = (v.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
         }
 
         let audio_bytes = unsafe { from_raw_parts(audio_i16.as_ptr() as *const u8, BUF_SIZE) };
         
-        let mut buf = Vec::with_capacity(BUF_SIZE + BUF_SIZE_HEX.as_bytes().len() + "\r\n".as_bytes().len() * 2);
+        let mut buf = Vec::with_capacity(BUF_SIZE + BUF_SIZE_HEX.len() + b"\r\n".len() * 2);
 
         buf.extend_from_slice(format!("{:x}\r\n", BUF_SIZE).as_bytes());
         buf.extend_from_slice(audio_bytes);
@@ -126,7 +126,7 @@ fn handle_conn(mut st: TcpStream, sample_rate: TFrameIdx, channels: u8, cmp_id: 
 
             let mut node = 
                 cmp_reg.lock().unwrap().get_active_buf(cmp_id, sample_rate)
-                    .expect(&format!("[ap.simple_http] Wasn't able to obtain active buffer for composition '{}'.", cmp_id));
+                    .unwrap_or_else(|| panic!("[ap.simple_http] Wasn't able to obtain active buffer for composition '{}'.", cmp_id));
             CompositionBufferNode::set_to_live(&mut node, sample_rate, channels);
             
             thread::spawn(move || {
@@ -143,7 +143,6 @@ fn handle_conn(mut st: TcpStream, sample_rate: TFrameIdx, channels: u8, cmp_id: 
             // TODO: Limit the size of the printed log in case req_path is too long.
             log::debug!("[ap.simple_http] The requested URL '{}' is invalid.", req_path);
             net_err_handle!(st.write_all(HTTP_400_RESPONSE.as_bytes()));
-            return;
         }
     }
 }

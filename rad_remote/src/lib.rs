@@ -18,7 +18,7 @@ struct State {
 /// Starts the REST API used to control and configure the service.
 pub async fn start_remote_server(cmp_reg: Arc<Mutex<CompositionRegistry<1024>>>, adapters: Vec<AdapterHandle>, addr: SocketAddr) -> std::io::Result<()> { 
     let state = State {
-        cmp_reg: cmp_reg,
+        cmp_reg,
         adapters: Mutex::new(adapters)
     };
 

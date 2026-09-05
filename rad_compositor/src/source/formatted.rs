@@ -2,12 +2,13 @@ use std::path::PathBuf;
 
 use rad_storage::{respond_storage, GLOBAL_SEGMENT_STORE};
 use rad_storage::segment_store::PileID;
-use symphonia::core::{audio::SampleBuffer, formats::FormatReader};
-use symphonia::core::codecs::{Decoder, DecoderOptions};
-use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo};
+use symphonia::core::units::Timestamp;
+use symphonia::core::formats::FormatReader;
+use symphonia::core::codecs::audio::{AudioDecoder, AudioDecoderOptions};
+use symphonia::core::formats::{FormatOptions, SeekMode, SeekTo, TrackType};
 use symphonia::core::io::{MediaSource, MediaSourceStream};
 use symphonia::core::meta::MetadataOptions;
-use symphonia::core::probe::Hint;
+use symphonia::core::formats::probe::Hint;
 
 use super::utils::sample_buf::SampleBuf;
 use super::{BaseSource, TFrameIdx};
@@ -24,12 +25,12 @@ pub struct FormattedStreamSource {
     storage_pile_id: PileID,
     origin: Option<StreamOrigin>,
     reader: Box<dyn FormatReader>,
-    decoder: Box<dyn Decoder>,
+    decoder: Box<dyn AudioDecoder>,
     sample_rate: TFrameIdx,
     channels: u8,
     track_id: u32,
     last_frame_idx: TFrameIdx,
-    duration: TFrameIdx,
+    duration: Option<TFrameIdx>,
     is_seekable: bool,
 }
 
@@ -57,23 +58,21 @@ impl FormattedStreamSource {
         let fmt_opts: FormatOptions = Default::default();
 
         // Probe the media source.
-        let probed;
-        if let Ok(_probed) = symphonia::default::get_probe()
-            .format(&hint, mss, &fmt_opts, &meta_opts) {
+        let mut format;
+        if let Ok(_format) = symphonia::default::get_probe()
+            .probe(&hint, mss, fmt_opts, meta_opts) {
             
-            probed = _probed
+            format = _format
         } else {
             // TODO: Add error handling
             return None;
             // return Err(InitError::UnsupportedFormat);
         }
 
-        // Get the instantiated format reader.
-        let mut format = probed.format;
-
         // Find the first audio track with a known (decodable) codec.
         let track;
-        if let Some(_track) = format.default_track() {
+        #[allow(clippy::question_mark)]
+        if let Some(_track) = format.default_track(TrackType::Audio) {
             track = _track.clone();
         } else {
             // TODO: Add error handling
@@ -81,27 +80,33 @@ impl FormattedStreamSource {
             // return Err(InitError::NoTrackFound);
         }
 
-        let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).unwrap();
+        let mut decoder = symphonia::default::get_codecs().make_audio_decoder(track.codec_params.clone().unwrap().audio().unwrap(), &AudioDecoderOptions::default()).unwrap();
 
         // Store the track identifier, it will be used to filter packets.
         let track_id = track.id;        
 
-        let decoded = decoder.decode(&format.next_packet().unwrap()).unwrap();
-        let mut buf: SampleBuffer<f32> = SampleBuffer::new(decoded.capacity() as u64, decoded.spec().clone());
+        let decoded: symphonia::core::audio::GenericAudioBufferRef<'_> = decoder.decode(&format.next_packet().unwrap().unwrap()).unwrap();
         let spec = decoded.spec().clone();
-        buf.copy_interleaved_ref(decoded);
         
-        let pile_id = GLOBAL_SEGMENT_STORE.write().unwrap().new_pile_id();
+        let pile_id;
+        {
+            let mut segment_store = GLOBAL_SEGMENT_STORE.write().unwrap();
+            
+            pile_id = segment_store.new_pile_id();
+            let buf = SampleBuf::from_audio_buf_ref(0, &decoded);
+            segment_store.insert(pile_id, buf.start(), buf.channels, buf.samples.into_boxed_slice(), !is_stream_seekable);
+        }
 
         Some(FormattedStreamSource {
             storage_pile_id: pile_id,
             decoder,
             origin,
             reader: format,
-            sample_rate: track.codec_params.sample_rate.unwrap() as TFrameIdx,
-            channels: spec.channels.count() as u8,
+            sample_rate: track.codec_params.unwrap().audio().unwrap().sample_rate.unwrap() as TFrameIdx,
+            channels: spec.channels().count() as u8,
             track_id,
-            duration: track.codec_params.n_frames.unwrap() as TFrameIdx,
+            // duration: track.codec_params.unwrap().n_frames.unwrap() as TFrameIdx,
+            duration: None,
             last_frame_idx: 0,
             is_seekable: is_stream_seekable,
         })
@@ -118,25 +123,25 @@ impl BaseSource for FormattedStreamSource {
     }
 
     fn current_duration_frames(&self) -> TFrameIdx {
-        self.duration
+        self.duration.unwrap_or(0)
     }
 
     fn duration(&self) -> Option<TFrameIdx> {
-        Some(self.duration)
+        self.duration
     }
 
     fn get_by_frame_i(&mut self, frame_idx: TFrameIdx) -> Option<Vec<super::TSample>> {
         respond_storage!(self.storage_pile_id, frame_idx);
 
         if frame_idx != self.last_frame_idx + 1 {
-            let seek_time = SeekTo::TimeStamp { ts: frame_idx as u64, track_id: self.track_id };
+            let seek_time = SeekTo::Timestamp { ts: Timestamp::new(frame_idx as i64), track_id: self.track_id };
             self.reader.seek(SeekMode::Accurate, seek_time).ok()?;
         }
 
-        let next_packet = self.reader.next_packet().ok()?;
+        let next_packet = self.reader.next_packet().ok()??;
         let decoded = self.decoder.decode(&next_packet).ok()?;
 
-        let buf = SampleBuf::from_audio_buf_ref(next_packet.ts as TFrameIdx, &decoded);
+        let buf = SampleBuf::from_audio_buf_ref(next_packet.pts.get() as TFrameIdx, &decoded);
         
         self.last_frame_idx = buf.start() + buf.frame_count() - 1;
 

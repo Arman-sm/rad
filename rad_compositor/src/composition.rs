@@ -2,7 +2,7 @@ use std::{sync::{atomic::AtomicU16, Arc, RwLock}, vec};
 
 use coarsetime::Instant;
 
-use crate::source::{BaseSource, Source, TFrameIdx};
+use crate::source::{BaseSource, Source, TFrameIdx, TFrameIdxSigned};
 
 pub type TWrappedCompositionState = Arc<RwLock<CompositionState>>;
 
@@ -10,8 +10,8 @@ static COMPOSITION_ID_TO_ALLOCATE: AtomicU16 = AtomicU16::new(0);
 pub struct SrcCompositionData { pub frame_offset: i64, pub amplification: f32 }
 pub struct CompositionSrc { pub src: Source, pub composition_data: SrcCompositionData }
 
-pub fn convert_sample_rates(sample_rate_a: TFrameIdx, rate_a: TFrameIdx, sample_rate_b: TFrameIdx) -> TFrameIdx {
-	rate_a * sample_rate_b / sample_rate_a
+pub fn convert_sample_rates(sample_rate_a: TFrameIdx, rate_a: TFrameIdxSigned, sample_rate_b: TFrameIdx) -> TFrameIdxSigned {
+	rate_a * sample_rate_b as TFrameIdxSigned / sample_rate_a as TFrameIdxSigned
 }
 
 pub struct CompositionState {
@@ -66,7 +66,7 @@ impl CompositionState {
 	}
 
 	pub fn get_time_millis(&self) -> u64 {
-		let curr_now = self.pause_t.unwrap_or_else(|| Instant::now());
+		let curr_now = self.pause_t.unwrap_or_else(Instant::now);
 		let elapsed_time_ms = curr_now.duration_since(self.start_t).as_millis();
 		
 		elapsed_time_ms.saturating_add_signed(self.playback_offset_ms)
@@ -84,7 +84,7 @@ impl CompositionState {
 	}
 
 	pub fn is_pushed_pass_zero(&self) -> bool {
-		self.playback_offset_ms < 0 && self.start_t.elapsed().as_millis() < self.playback_offset_ms.abs() as u64
+		self.playback_offset_ms < 0 && self.start_t.elapsed().as_millis() < self.playback_offset_ms.unsigned_abs()
 	}
 
 	pub fn is_paused(&self) -> bool {
@@ -101,7 +101,7 @@ impl CompositionState {
 		
 		if let Some(ref pause_t) = self.pause_t {
 			let now = Instant::now();
-			let time_passed_since_paused = now.duration_since(pause_t.clone());
+			let time_passed_since_paused = now.duration_since(*pause_t);
 			self.playback_offset_ms -= time_passed_since_paused.as_millis() as i64;
 			
 			self.pause_t = None;

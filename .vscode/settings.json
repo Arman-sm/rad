@@ -4,9 +4,11 @@
         "bufs",
         "cnxt",
         "dasp",
+        "ddir",
         "deof",
         "kanal",
         "tungstenite",
         "unpark"
-    ]
+    ],
+    "rust-analyzer.check.command": "clippy"
 }
