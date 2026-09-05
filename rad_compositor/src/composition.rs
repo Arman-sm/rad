@@ -55,7 +55,17 @@ impl CompositionState {
 
 	}
 
-	pub fn push_src_offset(&mut self, src: Source, frame_offset: i64) {
+	pub fn push_src_from_time(&mut self, src: Source, seconds_from_start: f32) {
+		self.sources.push(CompositionSrc {
+			composition_data: SrcCompositionData { 
+				amplification: 1.0,
+				frame_offset: (seconds_from_start * src.sample_rate() as f32) as i64
+			},
+			src,
+		});
+	}
+
+	pub fn push_src_offset_frames(&mut self, src: Source, frame_offset: i64) {
 		self.sources.push(CompositionSrc {
 			composition_data: SrcCompositionData { 
 				amplification: 1.0,

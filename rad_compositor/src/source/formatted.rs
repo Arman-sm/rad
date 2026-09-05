@@ -105,6 +105,7 @@ impl FormattedStreamSource {
             sample_rate: track.codec_params.unwrap().audio().unwrap().sample_rate.unwrap() as TFrameIdx,
             channels: spec.channels().count() as u8,
             track_id,
+            // TODO: Add this.
             // duration: track.codec_params.unwrap().n_frames.unwrap() as TFrameIdx,
             duration: None,
             last_frame_idx: 0,

@@ -161,13 +161,20 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: TFrameIdx, cmp
 	let channels;
 	let cmp_id;
 	let amp;
+	let _frame_idx;
+	let _change_idx;
 	{
 		let mut cmp = cmp_state.write().unwrap();
 		channels = cmp.get_channels();
 		cmp_id = cmp.get_id().clone();
 		amp = cmp.get_amplification();
+		_change_idx = cmp.config_change_idx;
+
+		let cur_frame_idx = (cmp.get_time_sec() * sample_rate as f64) as TFrameIdx;
 		first_node = 
-			CompositionBufferNode::new(compute_frames::<BUF_SIZE>(&mut cmp.sources, channels, sample_rate, amp, 0))
+			CompositionBufferNode::new(compute_frames::<BUF_SIZE>(&mut cmp.sources, channels, sample_rate, amp, cur_frame_idx));
+		
+		_frame_idx = cur_frame_idx + BUF_SIZE as TFrameIdx / channels as TFrameIdx;
 	}
 	
 	// Saving the current thread id does not mean anything. Its just a valid ThreadId to put instead of mem::uninitialized until changing it after creating the compositor thread.
@@ -187,8 +194,8 @@ pub fn init_compositor_thread<const BUF_SIZE: usize>(sample_rate: TFrameIdx, cmp
 
 			let mut node = _first_node;
 			let frames_in_buf: TFrameIdx = (BUF_SIZE / channels as usize) as TFrameIdx;
-			let mut frame_idx: TFrameIdx = 0;
-			let mut change_idx = 0;
+			let mut frame_idx: TFrameIdx = _frame_idx;
+			let mut change_idx = _change_idx;
 			let mut secs_sent = 0.0;
 			
 			loop {

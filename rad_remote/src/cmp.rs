@@ -117,8 +117,18 @@ pub async fn set_play(_cmp_id: web::Path<(String,)>, data: web::Data<State>) -> 
     HttpResponse::Ok().body("OK\n")
 }
 
+#[derive(Deserialize)]
+struct UploadQuery {
+    start: Option<f32>,
+}
+
 #[post("/{cmp_id}/upload")]
-pub async fn upload(_cmp_id: web::Path<(String,)>, data: web::Data<State>, mut payload: web::Payload) -> impl Responder {
+pub async fn upload(
+    _cmp_id: web::Path<(String,)>,
+    data: web::Data<State>,
+    queries: web::Query<UploadQuery>,
+    mut payload: web::Payload
+) -> impl Responder {
     let (cmp_id,) = _cmp_id.into_inner();
     
     let dyn_buf = Box::new(DynFmtBuf::new());
@@ -152,7 +162,11 @@ pub async fn upload(_cmp_id: web::Path<(String,)>, data: web::Data<State>, mut p
         let cmp_reg = data.cmp_reg.lock().unwrap();
         let mut cmp = find_cmp_write!(cmp_reg, cmp_id);
 
-        cmp.push_src_default(src.into());
+        if let Some(start) = queries.start {
+            cmp.push_src_from_time(src.into(), start);
+        } else {
+            cmp.push_src_default(src.into());
+        }
     }
 
     while let Some(buf) = payload.next().await {
